@@ -29,7 +29,7 @@ A macOS application for calculating Video Multi-Method Assessment Fusion (VMAF) 
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/VMAF.git
+   git clone https://github.com/oliverdougherC/VMAF
    ```
 
 2. Open the project in Xcode:
