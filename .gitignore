@@ -88,9 +88,5 @@ fastlane/test_output
 *.swp
 *~
 
-# App Specific
-VMAF/Resources/ffmpeg
-VMAF/Resources/lib/*
-!VMAF/Resources/lib/.gitkeep
 
 DEVELOPMENT_PLAN.md

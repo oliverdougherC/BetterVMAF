@@ -43,7 +43,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-		339E195C2D77EDDD008B143B /* Exceptions for "VMAF" folder in "Copy lib Directory" phase from "VMAF" target */ = {
+		33BEEA162D78FE7E00F4D8C5 /* Exceptions for "VMAF" folder in "Copy lib Directory" phase from "VMAF" target */ = {
 			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
 			attributesByRelativePath = {
 				Resources/lib/libavcodec.61.19.100.dylib = (CodeSignOnCopy, );
@@ -105,7 +105,7 @@
 		33175F702D77B32600B364A8 /* VMAF */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				339E195C2D77EDDD008B143B /* Exceptions for "VMAF" folder in "Copy lib Directory" phase from "VMAF" target */,
+				33BEEA162D78FE7E00F4D8C5 /* Exceptions for "VMAF" folder in "Copy lib Directory" phase from "VMAF" target */,
 			);
 			path = VMAF;
 			sourceTree = "<group>";
