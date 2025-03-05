@@ -5,13 +5,12 @@ A native macOS application for calculating VMAF (Video Multi-Method Assessment F
 ## Features
 
 - Native macOS interface
-- Simple drag-and-drop video selection
 - Real-time VMAF calculation
 - Detailed metrics including:
   - VMAF score
   - Score range (min/max)
   - Harmonic mean
-- Support for common video formats
+- Support for common video containers and codecs
 
 ## System Requirements
 
@@ -20,7 +19,7 @@ A native macOS application for calculating VMAF (Video Multi-Method Assessment F
 
 ## Installation
 
-1. Download the latest release from the [Releases](https://github.com/yourusername/better-vmaf/releases) page
+1. Download the latest release from the [Releases](https://github.com/oliverdougherC/VMAF/releases) page
 2. Open the downloaded `Better-VMAF.dmg` file
 3. Drag the "Better VMAF" app to your Applications folder
 4. The first time you run the app, you'll need to:
@@ -34,7 +33,7 @@ This is necessary because the app is not signed with an Apple Developer ID. You 
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/better-vmaf.git
+   git clone https://github.com/oliverdougherC/VMAF
    cd better-vmaf
    ```
 
@@ -65,7 +64,7 @@ Better VMAF uses FFmpeg with the libvmaf library to calculate video quality metr
 
 The VMAF score ranges from 0 to 100, where:
 - 100 represents perfect quality
-- Scores above 90 indicate excellent quality
+- Scores above 93 indicate excellent quality
 - Scores below 60 indicate significant quality issues
 
 ## License
