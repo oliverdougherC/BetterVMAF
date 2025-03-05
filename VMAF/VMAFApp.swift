@@ -12,8 +12,11 @@ struct VMAFApp: App {
     var body: some Scene {
         WindowGroup {
             VMAFView()
+                .frame(width: 500, height: 450)
+                .navigationViewStyle(.automatic)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
+        .defaultSize(width: 500, height: 450)
     }
 } 

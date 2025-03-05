@@ -12,7 +12,7 @@
 	<true/>
 	<key>com.apple.security.files.home-relative-path.read-write</key>
 	<array>
-		<string>Library/Containers/neurophasia.VMAF/Data/tmp</string>
+		<string>Library/Containers/neurophasia.BetterVMAF/Data/tmp</string>
 	</array>
 	<key>com.apple.security.files.home-relative-path.read-only</key>
 	<array>

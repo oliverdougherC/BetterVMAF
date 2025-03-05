@@ -1,69 +1,79 @@
-# VMAF Calculator
+# Better VMAF
 
-A macOS application for calculating Video Multi-Method Assessment Fusion (VMAF) scores between two video files. This tool provides an intuitive interface for comparing video quality using Netflix's VMAF algorithm.
+A native macOS application for calculating VMAF (Video Multi-Method Assessment Fusion) scores between two videos.
 
 ## Features
 
-- Simple drag-and-drop interface for selecting reference and comparison videos
-- Real-time VMAF score calculation
-- Displays comprehensive metrics including:
-  - VMAF Score
-  - Score Range (min/max)
-  - Harmonic Mean
-- Built-in FFmpeg with libvmaf support
-- Native macOS application
+- Native macOS interface
+- Simple drag-and-drop video selection
+- Real-time VMAF calculation
+- Detailed metrics including:
+  - VMAF score
+  - Score range (min/max)
+  - Harmonic mean
+- Support for common video formats
 
-## Requirements
+## System Requirements
 
 - macOS 13.0 or later
-- Xcode 15.0 or later (for development)
-- FFmpeg with libvmaf support (bundled with the application)
+- FFmpeg with libvmaf support (included in the app bundle)
 
 ## Installation
 
-1. Download the latest release from the releases page
-2. Drag the VMAF.app to your Applications folder
-3. Launch the application
+1. Download the latest release from the [Releases](https://github.com/yourusername/better-vmaf/releases) page
+2. Open the downloaded `Better-VMAF.dmg` file
+3. Drag the "Better VMAF" app to your Applications folder
+4. The first time you run the app, you'll need to:
+   - Right-click (or Control-click) the app in your Applications folder
+   - Select "Open" from the context menu
+   - Click "Open" in the security dialog that appears
+
+This is necessary because the app is not signed with an Apple Developer ID. You only need to do this once.
 
 ## Development Setup
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/oliverdougherC/VMAF
+   git clone https://github.com/yourusername/better-vmaf.git
+   cd better-vmaf
    ```
 
 2. Open the project in Xcode:
    ```bash
-   cd VMAF
    open VMAF.xcodeproj
    ```
 
 3. Build and run the project in Xcode
 
-## Usage
+## Building for Distribution
 
-1. Launch VMAF Calculator
-2. Click "Select" next to "Reference Video" to choose your original video
-3. Click "Select" next to "Comparison Video" to choose the video you want to compare
-4. Click "Calculate VMAF" to start the analysis
-5. Wait for the calculation to complete
-6. View the results showing the VMAF score and related metrics
+To create a DMG for distribution:
 
-## Technical Details
+1. Open Terminal and navigate to the project directory
+2. Run the build script:
+   ```bash
+   ./create_dmg.sh
+   ```
+3. The script will create `Better-VMAF.dmg` in the project directory
 
-The application uses FFmpeg with libvmaf to calculate VMAF scores. The calculation process:
-1. Loads both videos using FFmpeg
-2. Processes them frame by frame
-3. Calculates VMAF metrics using the libvmaf library
-4. Outputs results in JSON format
-5. Parses and displays the results in the UI
+## How It Works
+
+Better VMAF uses FFmpeg with the libvmaf library to calculate video quality metrics. The app provides a simple interface for:
+1. Selecting a reference video (original/high quality)
+2. Selecting a comparison video (to be evaluated)
+3. Calculating and displaying VMAF scores
+
+The VMAF score ranges from 0 to 100, where:
+- 100 represents perfect quality
+- Scores above 90 indicate excellent quality
+- Scores below 60 indicate significant quality issues
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
-- [Netflix VMAF](https://github.com/Netflix/vmaf) - The VMAF algorithm
-- [FFmpeg](https://ffmpeg.org/) - Video processing framework
-- [libvmaf](https://github.com/Netflix/vmaf/tree/master/libvmaf) - VMAF implementation library 
+- [FFmpeg](https://ffmpeg.org/) for video processing
+- [libvmaf](https://github.com/Netflix/vmaf) for VMAF calculation
+- Apple's SwiftUI framework for the user interface 

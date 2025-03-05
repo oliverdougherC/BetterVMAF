@@ -18,77 +18,121 @@ struct VMAFView: View {
     private let calculator = VMAFCalculator()
     
     var body: some View {
-        VStack(spacing: 20) {
-            Text("VMAF Calculator")
+        VStack(spacing: 24) {
+            Text("Better VMAF")
                 .font(.title)
+                .padding(.top)
+            
+            // Video Selection Section
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Video Selection")
+                    .font(.headline)
+                    .foregroundColor(.secondary)
+                
+                // Reference Video Selection
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Reference Video")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        if let url = referenceVideo {
+                            Text(url.lastPathComponent)
+                                .font(.system(.body, design: .monospaced))
+                                .lineLimit(1)
+                        } else {
+                            Text("Not Selected")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Button(action: { selectVideo(for: \VMAFView.referenceVideo) }) {
+                        Label("Select", systemImage: "doc.badge.plus")
+                            .font(.system(.body, design: .rounded))
+                    }
+                    .buttonStyle(.bordered)
+                }
                 .padding()
-            
-            // Reference Video Selection
-            HStack {
-                Text("Reference Video:")
-                Spacer()
-                if let url = referenceVideo {
-                    Text(url.lastPathComponent)
-                        .lineLimit(1)
-                } else {
-                    Text("Not Selected")
-                        .foregroundColor(.secondary)
+                .background(Color(.windowBackgroundColor))
+                .cornerRadius(8)
+                
+                // Comparison Video Selection
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Comparison Video")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        if let url = comparisonVideo {
+                            Text(url.lastPathComponent)
+                                .font(.system(.body, design: .monospaced))
+                                .lineLimit(1)
+                        } else {
+                            Text("Not Selected")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Button(action: { selectVideo(for: \VMAFView.comparisonVideo) }) {
+                        Label("Select", systemImage: "doc.badge.plus")
+                            .font(.system(.body, design: .rounded))
+                    }
+                    .buttonStyle(.bordered)
                 }
-                Button("Select") {
-                    selectVideo(for: \VMAFView.referenceVideo)
-                }
+                .padding()
+                .background(Color(.windowBackgroundColor))
+                .cornerRadius(8)
             }
-            
-            // Comparison Video Selection
-            HStack {
-                Text("Comparison Video:")
-                Spacer()
-                if let url = comparisonVideo {
-                    Text(url.lastPathComponent)
-                        .lineLimit(1)
-                } else {
-                    Text("Not Selected")
-                        .foregroundColor(.secondary)
-                }
-                Button("Select") {
-                    selectVideo(for: \VMAFView.comparisonVideo)
-                }
-            }
+            .padding(.horizontal)
             
             // Calculate Button
             Button(action: calculateVMAF) {
                 if isCalculating {
                     ProgressView()
+                        .controlSize(.large)
                 } else {
-                    Text("Calculate VMAF")
+                    Label("Calculate VMAF", systemImage: "chart.bar.fill")
+                        .font(.system(.body, design: .rounded))
                 }
             }
+            .buttonStyle(.borderedProminent)
             .disabled(referenceVideo == nil || comparisonVideo == nil || isCalculating)
+            .controlSize(.large)
             
-            // Results
+            // Results Section
             if let result = vmafResult {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Results:")
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Results")
                         .font(.headline)
-                    Text("VMAF Score: \(String(format: "%.2f", result.score))")
-                    Text("Range: \(String(format: "%.2f", result.minScore)) to \(String(format: "%.2f", result.maxScore))")
-                    Text("Harmonic Mean: \(String(format: "%.2f", result.harmonicMean))")
+                        .foregroundColor(.secondary)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        ResultRow(title: "VMAF Score", value: result.score)
+                        ResultRow(title: "Range", value: "\(String(format: "%.2f", result.minScore)) to \(String(format: "%.2f", result.maxScore))")
+                        ResultRow(title: "Harmonic Mean", value: result.harmonicMean)
+                    }
                 }
                 .padding()
-                .background(Color.secondary.opacity(0.1))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.windowBackgroundColor))
                 .cornerRadius(8)
+                .padding(.horizontal)
             }
             
             if let error = errorMessage {
                 Text(error)
+                    .font(.callout)
                     .foregroundColor(.red)
                     .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color(.windowBackgroundColor))
+                    .cornerRadius(8)
+                    .padding(.horizontal)
             }
             
             Spacer()
         }
-        .padding()
-        .frame(minWidth: 400, minHeight: 300)
+        .padding(.vertical)
     }
     
     private func selectVideo(for keyPath: ReferenceWritableKeyPath<VMAFView, URL?>) {
@@ -125,6 +169,27 @@ struct VMAFView: View {
                     self.errorMessage = error.localizedDescription
                     self.isCalculating = false
                 }
+            }
+        }
+    }
+}
+
+struct ResultRow: View {
+    let title: String
+    let value: Any
+    
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            Spacer()
+            if let doubleValue = value as? Double {
+                Text(String(format: "%.2f", doubleValue))
+                    .font(.system(.body, design: .monospaced))
+            } else if let stringValue = value as? String {
+                Text(stringValue)
+                    .font(.system(.body, design: .monospaced))
             }
         }
     }
