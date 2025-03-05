@@ -23,9 +23,12 @@ A native macOS application for calculating VMAF (Video Multi-Method Assessment F
 2. Open the downloaded `Better_VMAF.dmg` file
 3. Drag the "Better VMAF" app to your Applications folder
 4. The first time you run the app, you'll need to:
-   - Right-click (or Control-click) the app in your Applications folder
-   - Select "Open" from the context menu
-   - Click "Open" in the security dialog that appears
+   - Open the app
+   - Select "Done" on the security pop-up
+   - Naviagte to System Settings > Security and Privacy
+   - Scroll down to the "Security" section
+   - Press "Open Anyway" next to the Better VMAF warning
+   - Provide your fingerprint or adminstator password
 
 This is necessary because the app is not signed with an Apple Developer ID. You only need to do this once.
 
