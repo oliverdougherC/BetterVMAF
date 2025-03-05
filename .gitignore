@@ -1,5 +1,18 @@
-# Xcode
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Xcode
 xcuserdata/
 *.xcscmblueprint
 *.xccheckout
@@ -18,22 +31,64 @@ DerivedData/
 *.ipa
 *.dSYM.zip
 *.dSYM
+*.xcuserstate
+*.xcworkspace
+!default.xcworkspace
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+!*.xcworkspace/contents.xcworkspacedata
+**/xcshareddata/WorkspaceSettings.xcsettings
 
 # Swift Package Manager
 .build/
 .swiftpm/
+.swiftpm/config/registries.json
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+.netrc
 
 # CocoaPods
 Pods/
+*.xcworkspace
+Podfile.lock
 
 # Carthage
 Carthage/Build/
+Carthage/Checkouts
 
 # fastlane
 fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
-fastlane/test_output 
+fastlane/test_output
 
-#dmg files
+# Distribution
 *.dmg
+*.zip
+*.tar.gz
+*.tar
+*.tgz
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Build Scripts
+*.sh
+!create_dmg.sh
+
+# Temporary Files
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# App Specific
+VMAF/Resources/ffmpeg
+VMAF/Resources/lib/*
+!VMAF/Resources/lib/.gitkeep
