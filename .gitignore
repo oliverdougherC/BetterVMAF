@@ -92,3 +92,5 @@ fastlane/test_output
 VMAF/Resources/ffmpeg
 VMAF/Resources/lib/*
 !VMAF/Resources/lib/.gitkeep
+
+DEVELOPMENT_PLAN.md
