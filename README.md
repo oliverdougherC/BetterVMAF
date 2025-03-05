@@ -19,8 +19,8 @@ A native macOS application for calculating VMAF (Video Multi-Method Assessment F
 
 ## Installation
 
-1. Download the latest release from the [Releases](https://github.com/oliverdougherC/VMAF/releases) page
-2. Open the downloaded `Better-VMAF.dmg` file
+1. Download the latest release from the [Releases](https://github.com/oliverdougherC/BetterVMAF/releases) page
+2. Open the downloaded `Better_VMAF.dmg` file
 3. Drag the "Better VMAF" app to your Applications folder
 4. The first time you run the app, you'll need to:
    - Right-click (or Control-click) the app in your Applications folder
@@ -33,8 +33,8 @@ This is necessary because the app is not signed with an Apple Developer ID. You 
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/oliverdougherC/VMAF
-   cd better-vmaf
+   git clone https://github.com/oliverdougherC/BetterVMAF
+   cd BetterVMAF
    ```
 
 2. Open the project in Xcode:
