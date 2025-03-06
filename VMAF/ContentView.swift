@@ -23,6 +23,7 @@ struct VMAFView: View {
     @State private var errorMessage: String?
     @State private var showGraph = false  // Graph hidden by default
     @State private var visualizationType: VisualizationType = .line
+    @State private var showExportOptions = false
     
     private let calculator = VMAFCalculator()
     
@@ -163,6 +164,18 @@ struct VMAFView: View {
                                     .foregroundColor(showGraph && visualizationType == .heatmap ? .white : .primary)
                                     .cornerRadius(6)
                                     .controlSize(.small)
+                                    
+                                    Divider()
+                                        .frame(height: 16)
+                                    
+                                    Button(action: { showExportOptions = true }) {
+                                        Label("Export", systemImage: "square.and.arrow.up")
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(6)
+                                    .background(Color(nsColor: .controlBackgroundColor))
+                                    .cornerRadius(6)
+                                    .controlSize(.small)
                                 }
                             }
                             
@@ -204,6 +217,9 @@ struct VMAFView: View {
         }
         .frame(minWidth: 500, minHeight: 400)  // Reduced minimum size
         .background(Color(nsColor: .windowBackgroundColor))
+        .sheet(isPresented: $showExportOptions) {
+            ExportOptionsView(result: vmafResult!)
+        }
     }
     
     private func selectVideo(for keyPath: ReferenceWritableKeyPath<VMAFView, URL?>) {
