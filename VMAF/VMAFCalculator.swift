@@ -8,6 +8,7 @@
 
 import Foundation
 import AVFoundation
+import Charts
 
 class VMAFCalculator {
     struct VMAFResult {
@@ -15,6 +16,109 @@ class VMAFCalculator {
         let minScore: Double
         let maxScore: Double
         let harmonicMean: Double
+        let frameMetrics: [FrameMetric]
+        let duration: TimeInterval
+        let frameCount: Int
+    }
+    
+    struct FrameMetric: Codable, Identifiable {
+        let frameNumber: Int
+        let vmafScore: Double
+        let integerMotion: Double
+        let integerMotion2: Double
+        let integerAdm2: Double
+        let integerAdmScales: [Double]
+        let integerVifScales: [Double]
+        
+        // Identifiable conformance
+        var id: Int { frameNumber }
+        
+        // Computed property for timestamp (assuming 30fps)
+        var timestamp: TimeInterval {
+            TimeInterval(frameNumber - 1) / 30.0
+        }
+        
+        init(frameNumber: Int,
+             vmafScore: Double,
+             integerMotion: Double,
+             integerMotion2: Double,
+             integerAdm2: Double,
+             integerAdmScales: [Double],
+             integerVifScales: [Double]) {
+            self.frameNumber = frameNumber
+            self.vmafScore = vmafScore
+            self.integerMotion = integerMotion
+            self.integerMotion2 = integerMotion2
+            self.integerAdm2 = integerAdm2
+            self.integerAdmScales = integerAdmScales
+            self.integerVifScales = integerVifScales
+        }
+        
+        enum CodingKeys: String, CodingKey {
+            case frameNumber = "frameNum"
+            case metrics
+        }
+        
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            frameNumber = try container.decode(Int.self, forKey: .frameNumber)
+            
+            let metricsContainer = try container.nestedContainer(keyedBy: MetricsCodingKeys.self, forKey: .metrics)
+            vmafScore = try metricsContainer.decode(Double.self, forKey: .vmaf)
+            integerMotion = try metricsContainer.decode(Double.self, forKey: .integerMotion)
+            integerMotion2 = try metricsContainer.decode(Double.self, forKey: .integerMotion2)
+            integerAdm2 = try metricsContainer.decode(Double.self, forKey: .integerAdm2)
+            
+            integerAdmScales = [
+                try metricsContainer.decode(Double.self, forKey: .integerAdmScale0),
+                try metricsContainer.decode(Double.self, forKey: .integerAdmScale1),
+                try metricsContainer.decode(Double.self, forKey: .integerAdmScale2),
+                try metricsContainer.decode(Double.self, forKey: .integerAdmScale3)
+            ]
+            
+            integerVifScales = [
+                try metricsContainer.decode(Double.self, forKey: .integerVifScale0),
+                try metricsContainer.decode(Double.self, forKey: .integerVifScale1),
+                try metricsContainer.decode(Double.self, forKey: .integerVifScale2),
+                try metricsContainer.decode(Double.self, forKey: .integerVifScale3)
+            ]
+        }
+        
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(frameNumber, forKey: .frameNumber)
+            
+            var metricsContainer = container.nestedContainer(keyedBy: MetricsCodingKeys.self, forKey: .metrics)
+            try metricsContainer.encode(vmafScore, forKey: .vmaf)
+            try metricsContainer.encode(integerMotion, forKey: .integerMotion)
+            try metricsContainer.encode(integerMotion2, forKey: .integerMotion2)
+            try metricsContainer.encode(integerAdm2, forKey: .integerAdm2)
+            
+            try metricsContainer.encode(integerAdmScales[0], forKey: .integerAdmScale0)
+            try metricsContainer.encode(integerAdmScales[1], forKey: .integerAdmScale1)
+            try metricsContainer.encode(integerAdmScales[2], forKey: .integerAdmScale2)
+            try metricsContainer.encode(integerAdmScales[3], forKey: .integerAdmScale3)
+            
+            try metricsContainer.encode(integerVifScales[0], forKey: .integerVifScale0)
+            try metricsContainer.encode(integerVifScales[1], forKey: .integerVifScale1)
+            try metricsContainer.encode(integerVifScales[2], forKey: .integerVifScale2)
+            try metricsContainer.encode(integerVifScales[3], forKey: .integerVifScale3)
+        }
+        
+        private enum MetricsCodingKeys: String, CodingKey {
+            case vmaf
+            case integerMotion = "integer_motion"
+            case integerMotion2 = "integer_motion2"
+            case integerAdm2 = "integer_adm2"
+            case integerAdmScale0 = "integer_adm_scale0"
+            case integerAdmScale1 = "integer_adm_scale1"
+            case integerAdmScale2 = "integer_adm_scale2"
+            case integerAdmScale3 = "integer_adm_scale3"
+            case integerVifScale0 = "integer_vif_scale0"
+            case integerVifScale1 = "integer_vif_scale1"
+            case integerVifScale2 = "integer_vif_scale2"
+            case integerVifScale3 = "integer_vif_scale3"
+        }
     }
     
     struct VMAFMetrics: Codable {
@@ -28,6 +132,32 @@ class VMAFCalculator {
             case max
             case mean
             case harmonicMean = "harmonic_mean"
+        }
+    }
+    
+    struct VMAFData: Codable {
+        let frames: [FrameMetric]
+        let pooledMetrics: [String: VMAFMetrics]
+        let aggregateMetrics: [String: String]
+        
+        enum CodingKeys: String, CodingKey {
+            case frames
+            case pooledMetrics = "pooled_metrics"
+            case aggregateMetrics = "aggregate_metrics"
+        }
+        
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            frames = try container.decode([FrameMetric].self, forKey: .frames)
+            pooledMetrics = try container.decode([String: VMAFMetrics].self, forKey: .pooledMetrics)
+            aggregateMetrics = try container.decode([String: String].self, forKey: .aggregateMetrics)
+        }
+        
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(frames, forKey: .frames)
+            try container.encode(pooledMetrics, forKey: .pooledMetrics)
+            try container.encode(aggregateMetrics, forKey: .aggregateMetrics)
         }
     }
     
@@ -51,7 +181,7 @@ class VMAFCalculator {
         // Ensure the temporary directory exists and is writable
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         
-        // Build the ffmpeg command
+        // Build the ffmpeg command with enhanced metrics collection
         let command = [
             ffmpegPath,
             "-hide_banner",
@@ -111,11 +241,18 @@ class VMAFCalculator {
                 throw VMAFError.missingMetrics
             }
             
+            // Calculate duration and frame count
+            let frameCount = vmafData.frames.count
+            let duration = TimeInterval(frameCount) / 30.0 // Assuming 30fps, we'll need to get actual fps
+            
             return VMAFResult(
                 score: vmafMetrics.mean,
                 minScore: vmafMetrics.min,
                 maxScore: vmafMetrics.max,
-                harmonicMean: vmafMetrics.harmonicMean
+                harmonicMean: vmafMetrics.harmonicMean,
+                frameMetrics: vmafData.frames,
+                duration: duration,
+                frameCount: frameCount
             )
         } catch {
             print("Error during VMAF calculation: \(error)")
@@ -129,13 +266,5 @@ extension VMAFCalculator {
     enum VMAFError: Error {
         case missingMetrics
         case ffmpegError(String)
-    }
-    
-    struct VMAFData: Codable {
-        let pooledMetrics: [String: VMAFMetrics]
-        
-        enum CodingKeys: String, CodingKey {
-            case pooledMetrics = "pooled_metrics"
-        }
     }
 } 

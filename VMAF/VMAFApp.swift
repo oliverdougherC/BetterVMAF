@@ -11,12 +11,12 @@ import SwiftUI
 struct VMAFApp: App {
     var body: some Scene {
         WindowGroup {
-            VMAFView()
-                .frame(width: 500, height: 450)
-                .navigationViewStyle(.automatic)
+            ContentView()
+                .frame(minWidth: 600, minHeight: 500)
         }
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
-        .defaultSize(width: 500, height: 450)
+        .windowStyle(.automatic)
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 600, height: 500)
+        .defaultPosition(.center)
     }
 } 
