@@ -231,6 +231,13 @@ struct VMAFView: View {
         
         if panel.runModal() == .OK, let url = panel.url {
             self[keyPath: keyPath] = url
+            
+            // Store the path for PDF export
+            if keyPath == \VMAFView.referenceVideo {
+                UserDefaults.standard.set(url, forKey: "LastReferenceVideo")
+            } else if keyPath == \VMAFView.comparisonVideo {
+                UserDefaults.standard.set(url, forKey: "LastComparisonVideo")
+            }
         }
     }
     

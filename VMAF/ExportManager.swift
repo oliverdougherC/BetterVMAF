@@ -83,9 +83,22 @@ class ExportManager {
     }
     
     func exportToPDF(result: VMAFCalculator.VMAFResult, options: ExportOptions) throws -> Data {
-        // TODO: Implement PDF generation with graphs and formatted report
-        // This will require additional PDF generation libraries or native PDFKit implementation
-        throw NSError(domain: "ExportManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "PDF export not yet implemented"])
+        guard let referenceVideo = UserDefaults.standard.url(forKey: "LastReferenceVideo"),
+              let comparisonVideo = UserDefaults.standard.url(forKey: "LastComparisonVideo") else {
+            throw NSError(domain: "ExportManager", code: 2, userInfo: [NSLocalizedDescriptionKey: "Video paths not available"])
+        }
+        
+        let videoInfo = PDFGenerator.VideoInfo(
+            referenceVideo: referenceVideo,
+            comparisonVideo: comparisonVideo
+        )
+        
+        return PDFGenerator.generateReport(
+            result: result,
+            videoInfo: videoInfo,
+            includeGraphs: options.includeGraphs,
+            includeFrameData: options.includeFrameData
+        )
     }
     
     func export(result: VMAFCalculator.VMAFResult, format: ExportFormat, options: ExportOptions) throws -> Data {
