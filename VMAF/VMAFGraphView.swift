@@ -8,6 +8,9 @@ struct VMAFGraphView: View {
     @State private var zoomLevel: Double = 1.0
     @State private var scrollPosition: TimeInterval = 0
     @State private var hoveredFrame: VMAFCalculator.FrameMetric?
+    @State private var hoverDebounceTimer: Timer?
+    @State private var isHoverBoxVisible = false
+    @State private var lastHoveredLocation: CGPoint?
     @State private var chartProxy: ChartProxy?
     @State private var sliderPosition: Double = 0
     
@@ -82,20 +85,25 @@ struct VMAFGraphView: View {
                         AxisMarks(values: .stride(by: 1)) { value in
                             if let time = value.as(TimeInterval.self) {
                                 AxisValueLabel(formatTime(time))
-                                    .font(.system(size: 9))  // Smaller font
+                                    .font(.system(size: 9))
                             }
+                            AxisGridLine()
+                                .foregroundStyle(.clear)  // Hide X-axis grid lines
                         }
                     }
                     .chartYAxis {
                         AxisMarks(values: .stride(by: 10)) { value in
                             if let score = value.as(Double.self) {
                                 AxisValueLabel(String(format: "%.0f", score))
-                                    .font(.system(size: 9))  // Smaller font
+                                    .font(.system(size: 9))
                             }
                             AxisGridLine()
                                 .foregroundStyle(.gray.opacity(0.1))
                         }
                     }
+                    .chartLegend(.hidden)  // Hide the legend
+                    .chartXAxisLabel("")   // Remove X axis label
+                    .chartYAxisLabel("")   // Remove Y axis label
                     .chartOverlay { proxy in
                         GeometryReader { geometry in
                             Rectangle().fill(.clear).contentShape(Rectangle())
@@ -105,18 +113,28 @@ struct VMAFGraphView: View {
                                 .onContinuousHover { phase in
                                     switch phase {
                                     case .active(let location):
-                                        if let (frame, distance) = findNearestFrame(at: location, in: geometry, proxy: proxy),
-                                           distance < 10 { // Only select if within 10 points of the dot
-                                            withAnimation(.easeOut(duration: 0.1)) {
-                                                hoveredFrame = frame
-                                            }
-                                        } else {
-                                            withAnimation(.easeOut(duration: 0.1)) {
-                                                hoveredFrame = nil
+                                        lastHoveredLocation = location
+                                        
+                                        // Cancel existing timer
+                                        hoverDebounceTimer?.invalidate()
+                                        
+                                        // Create new timer for debouncing
+                                        hoverDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: false) { _ in
+                                            if let (frame, distance) = findNearestFrame(at: location, in: geometry, proxy: proxy),
+                                               distance < 30 { // Increased detection area and simplified distance calculation
+                                                withAnimation(.easeOut(duration: 0.15)) {
+                                                    if hoveredFrame?.frameNumber != frame.frameNumber {
+                                                        hoveredFrame = frame
+                                                        isHoverBoxVisible = true
+                                                    }
+                                                }
                                             }
                                         }
                                     case .ended:
-                                        withAnimation(.easeOut(duration: 0.1)) {
+                                        hoverDebounceTimer?.invalidate()
+                                        lastHoveredLocation = nil
+                                        withAnimation(.easeOut(duration: 0.15)) {
+                                            isHoverBoxVisible = false
                                             hoveredFrame = nil
                                         }
                                     }
@@ -125,16 +143,16 @@ struct VMAFGraphView: View {
                     }
                     
                     // Hover details popup
-                    if let frame = hoveredFrame, let proxy = chartProxy {
+                    if let frame = hoveredFrame, let proxy = chartProxy, isHoverBoxVisible {
                         GeometryReader { geometry in
                             frameDetailsView(frame: frame)
                                 .padding(4)
                                 .background(Color(nsColor: .controlBackgroundColor))
                                 .cornerRadius(4)
                                 .shadow(radius: 2)
+                                .opacity(isHoverBoxVisible ? 1 : 0)
                                 .offset(x: calculateHoverBoxOffset(for: frame, in: geometry),
-                                        y: calculateVerticalPosition(for: frame, in: geometry, proxy: proxy))
-                                .animation(.easeOut(duration: 0.1), value: frame.frameNumber)
+                                      y: calculateVerticalPosition(for: frame, in: geometry, proxy: proxy))
                         }
                     }
                 }
@@ -167,18 +185,28 @@ struct VMAFGraphView: View {
                 
                 Divider().frame(height: 12)
                 
-                Text("Metrics: \(frameMetrics.count) (\(filteredMetrics.count) visible)")
+                Text("Metrics: \(frameMetrics.count)")
                     .font(.system(size: 10))
                 
                 if isZoomed {
-                    Text("Zoom: \(String(format: "%.1fx", zoomLevel))")
+                    Text("(\(filteredMetrics.count) visible)")
                         .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                    
+                    Text("• Zoom: \(String(format: "%.1fx", zoomLevel))")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
                 }
                 
                 Spacer()
                 
-                Text("Average VMAF: \(String(format: "%.1f", calculateAverageVMAF()))")
-                    .font(.system(size: 10))
+                if isZoomed {
+                    Text("Visible VMAF: \(String(format: "%.1f", calculateVisibleVMAF()))")
+                        .font(.system(size: 10))
+                } else {
+                    Text("Average VMAF: \(String(format: "%.1f", calculateTotalVMAF()))")
+                        .font(.system(size: 10))
+                }
             }
             .frame(height: 24)
             .padding(4)
@@ -198,15 +226,24 @@ struct VMAFGraphView: View {
                     }
                     .chartXScale(domain: timeRange)
                     .chartYScale(domain: yAxisRange)
+                    .chartXAxis(.hidden)  // Hide X axis completely
+                    .chartYAxis(.hidden)  // Hide Y axis completely
+                    .chartLegend(.hidden) // Hide legend
                     .frame(height: 20)
                     .overlay(
                         GeometryReader { geometry in
+                            let totalDuration = timeRange.upperBound - timeRange.lowerBound
+                            let visibleDuration = totalDuration / zoomLevel
+                            let maxScroll = totalDuration - visibleDuration
+                            let progress = (scrollPosition - timeRange.lowerBound) / maxScroll
                             let visibleWidth = geometry.size.width / zoomLevel
-                            let xOffset = geometry.size.width * (scrollPosition - timeRange.lowerBound) / (timeRange.upperBound - timeRange.lowerBound)
+                            let maxOffset = geometry.size.width - visibleWidth
+                            let xOffset = maxOffset * progress
+                            
                             Rectangle()
                                 .fill(.blue.opacity(0.2))
                                 .frame(width: visibleWidth)
-                                .offset(x: xOffset)
+                                .offset(x: min(maxOffset, xOffset))
                         }
                     )
                     
@@ -214,12 +251,17 @@ struct VMAFGraphView: View {
                     Slider(
                         value: Binding(
                             get: {
-                                (scrollPosition - timeRange.lowerBound) / (timeRange.upperBound - timeRange.lowerBound)
+                                let totalDuration = timeRange.upperBound - timeRange.lowerBound
+                                let visibleDuration = totalDuration / zoomLevel
+                                let maxScroll = totalDuration - visibleDuration
+                                return (scrollPosition - timeRange.lowerBound) / maxScroll
                             },
                             set: { newValue in
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     let totalDuration = timeRange.upperBound - timeRange.lowerBound
-                                    scrollPosition = timeRange.lowerBound + totalDuration * newValue
+                                    let visibleDuration = totalDuration / zoomLevel
+                                    let maxScroll = totalDuration - visibleDuration
+                                    scrollPosition = timeRange.lowerBound + (maxScroll * newValue)
                                     updateDisplayRange(scrollPosition: scrollPosition)
                                 }
                             }
@@ -252,21 +294,29 @@ struct VMAFGraphView: View {
     }
     
     private func findNearestFrame(at location: CGPoint, in geometry: GeometryProxy, proxy: ChartProxy) -> (VMAFCalculator.FrameMetric, CGFloat)? {
-        let xPosition = location.x - geometry.frame(in: .local).origin.x
-        let yPosition = location.y - geometry.frame(in: .local).origin.y
+        let xPosition = location.x
+        let yPosition = location.y
         
-        // Check if the position is valid within the chart
-        guard (proxy.value(atX: xPosition) as TimeInterval?) != nil,
-              (proxy.value(atY: yPosition) as Double?) != nil else { return nil }
+        // Get the chart area bounds
+        let chartFrame = geometry.frame(in: .local)
         
+        // Ensure the cursor is within the chart bounds
+        guard chartFrame.contains(CGPoint(x: xPosition, y: yPosition)) else { return nil }
+        
+        // Convert screen coordinates to data values
+        guard let _ = proxy.value(atX: xPosition) as TimeInterval?,
+              let _ = proxy.value(atY: yPosition) as Double? else { return nil }
+        
+        // Find the nearest frame primarily based on X-axis distance
         return filteredMetrics
             .map { metric -> (VMAFCalculator.FrameMetric, CGFloat) in
-                guard let metricX = proxy.position(forX: metric.timestamp),
-                      let metricY = proxy.position(forY: metric.vmafScore) else {
+                guard let metricX = proxy.position(forX: metric.timestamp) else {
                     return (metric, .infinity)
                 }
                 
-                let distance = sqrt(pow(metricX - xPosition, 2) + pow(metricY - yPosition, 2))
+                // Prioritize X-axis distance more than Y-axis distance
+                let xDistance = abs(metricX - xPosition)
+                let distance = xDistance
                 return (metric, distance)
             }
             .min { $0.1 < $1.1 }
@@ -309,34 +359,41 @@ struct VMAFGraphView: View {
         return String(format: "%d:%02d", minutes, seconds)
     }
     
-    private func calculateAverageVMAF() -> Double {
+    private func calculateVisibleVMAF() -> Double {
         guard !filteredMetrics.isEmpty else { return 0 }
         let sum = filteredMetrics.reduce(0) { $0 + $1.vmafScore }
         return sum / Double(filteredMetrics.count)
     }
     
+    private func calculateTotalVMAF() -> Double {
+        guard !frameMetrics.isEmpty else { return 0 }
+        let sum = frameMetrics.reduce(0) { $0 + $1.vmafScore }
+        return sum / Double(frameMetrics.count)
+    }
+    
     private func calculateHoverBoxOffset(for frame: VMAFCalculator.FrameMetric, in geometry: GeometryProxy) -> CGFloat {
         let boxWidth: CGFloat = 120
-        let padding: CGFloat = 5
+        let padding: CGFloat = 15  // Increased consistent padding
         
         guard let proxy = chartProxy,
               let xPosition = proxy.position(forX: frame.timestamp) else { return 0 }
         
-        // If the box would go off the right edge, place it to the left of the cursor
+        // Always place the box to the right of the point unless it would go off screen
         if xPosition > (geometry.size.width - boxWidth - padding) {
             return xPosition - boxWidth - padding
         }
         
-        // Otherwise, place it to the right of the cursor
         return xPosition + padding
     }
     
     private func calculateVerticalPosition(for frame: VMAFCalculator.FrameMetric, in geometry: GeometryProxy, proxy: ChartProxy) -> CGFloat {
         guard let yPosition = proxy.position(forY: frame.vmafScore) else { return 0 }
-        let boxHeight: CGFloat = 80  // Reduced height
+        let boxHeight: CGFloat = 80
+        let padding: CGFloat = 10  // Added consistent vertical padding
         
-        // Ensure the box stays within the chart's bounds and closer to the point
-        return min(max(0, yPosition - boxHeight/2), geometry.size.height - boxHeight)
+        // Keep the box vertically aligned with the point but ensure it stays within bounds
+        let desiredPosition = yPosition - (boxHeight / 2)
+        return min(max(padding, desiredPosition), geometry.size.height - boxHeight - padding)
     }
 }
 
