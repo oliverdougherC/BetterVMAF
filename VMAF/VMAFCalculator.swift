@@ -70,11 +70,7 @@ class VMAFCalculator {
         process.arguments = Array(command.dropFirst())
         
         // Set up environment variables
-        var env = ProcessInfo.processInfo.environment
-        if let libPath = Bundle.main.path(forResource: "lib", ofType: nil) {
-            env["DYLD_LIBRARY_PATH"] = libPath
-        }
-        process.environment = env
+        process.environment = ProcessInfo.processInfo.environment
         
         let pipe = Pipe()
         process.standardError = pipe
