@@ -22,8 +22,14 @@ struct VMAFView: View {
     @State private var isCalculating = false
     @State private var errorMessage: String?
     @State private var showGraph = false  // Graph hidden by default
+    @State private var visualizationType: VisualizationType = .line
     
     private let calculator = VMAFCalculator()
+    
+    enum VisualizationType {
+        case line
+        case heatmap
+    }
     
     var body: some View {
         VStack(spacing: 16) {
@@ -119,11 +125,45 @@ struct VMAFView: View {
                                 
                                 Spacer()
                                 
-                                Toggle(isOn: $showGraph) {
-                                    Label("Show Graph", systemImage: "chart.xyaxis.line")
+                                HStack(spacing: 8) {
+                                    Button(action: {
+                                        if showGraph && visualizationType == .line {
+                                            // If this button is active, deactivate it
+                                            showGraph = false
+                                        } else {
+                                            // Activate this button and deactivate the other
+                                            showGraph = true
+                                            visualizationType = .line
+                                        }
+                                    }) {
+                                        Label("Show Graph", systemImage: "chart.xyaxis.line")
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(6)
+                                    .background(showGraph && visualizationType == .line ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+                                    .foregroundColor(showGraph && visualizationType == .line ? .white : .primary)
+                                    .cornerRadius(6)
+                                    .controlSize(.small)
+                                    
+                                    Button(action: {
+                                        if showGraph && visualizationType == .heatmap {
+                                            // If this button is active, deactivate it
+                                            showGraph = false
+                                        } else {
+                                            // Activate this button and deactivate the other
+                                            showGraph = true
+                                            visualizationType = .heatmap
+                                        }
+                                    }) {
+                                        Label("Show Heat Map", systemImage: "chart.bar.fill")
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(6)
+                                    .background(showGraph && visualizationType == .heatmap ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+                                    .foregroundColor(showGraph && visualizationType == .heatmap ? .white : .primary)
+                                    .cornerRadius(6)
+                                    .controlSize(.small)
                                 }
-                                .toggleStyle(.button)
-                                .controlSize(.small)
                             }
                             
                             VStack(alignment: .leading, spacing: 12) {
@@ -134,8 +174,13 @@ struct VMAFView: View {
                             
                             // Graph View (only shown when toggled)
                             if showGraph {
-                                VMAFGraphView(frameMetrics: result.frameMetrics)
-                                    .frame(minHeight: 300, maxHeight: 500)
+                                if visualizationType == .line {
+                                    VMAFGraphView(frameMetrics: result.frameMetrics)
+                                        .frame(minHeight: 300, maxHeight: 500)
+                                } else {
+                                    HeatMapView(frameMetrics: result.frameMetrics)
+                                        .frame(minHeight: 300, maxHeight: 500)
+                                }
                             }
                         }
                         .padding()
