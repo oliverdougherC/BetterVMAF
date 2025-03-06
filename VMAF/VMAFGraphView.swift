@@ -48,98 +48,101 @@ struct VMAFGraphView: View {
     var body: some View {
         VStack(spacing: 4) {
             // Chart with optional hover details
-            ZStack(alignment: .topLeading) {
-                // Chart
-                Chart(filteredMetrics) { metric in
-                    // Background grid lines
-                    ForEach([10, 20, 30, 40, 50, 60, 70, 80, 90, 100], id: \.self) { value in
-                        RuleMark(y: .value("Grid", value))
-                            .foregroundStyle(.gray.opacity(0.1))
-                    }
-                    
-                    // Data line
-                    LineMark(
-                        x: .value("Time", metric.timestamp),
-                        y: .value("VMAF", metric.vmafScore)
-                    )
-                    .foregroundStyle(.blue)
-                    
-                    // Interactive points
-                    PointMark(
-                        x: .value("Time", metric.timestamp),
-                        y: .value("VMAF", metric.vmafScore)
-                    )
-                    .foregroundStyle(hoveredFrame?.frameNumber == metric.frameNumber ? .blue : .blue.opacity(0.3))
-                    .symbol(.circle)
-                    .symbolSize(hoveredFrame?.frameNumber == metric.frameNumber ? 30 : 20)
-                }
-                .chartXScale(domain: displayRange)
-                .chartYScale(domain: yAxisRange)
-                .animation(.easeInOut(duration: 0.2), value: displayRange)
-                .animation(.easeInOut(duration: 0.2), value: zoomLevel)
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: 1)) { value in
-                        if let time = value.as(TimeInterval.self) {
-                            AxisValueLabel(formatTime(time))
-                                .font(.system(size: 9))  // Smaller font
+            GeometryReader { geometry in
+                ZStack(alignment: .topLeading) {
+                    // Chart
+                    Chart(filteredMetrics) { metric in
+                        // Background grid lines
+                        ForEach([10, 20, 30, 40, 50, 60, 70, 80, 90, 100], id: \.self) { value in
+                            RuleMark(y: .value("Grid", value))
+                                .foregroundStyle(.gray.opacity(0.1))
                         }
+                        
+                        // Data line
+                        LineMark(
+                            x: .value("Time", metric.timestamp),
+                            y: .value("VMAF", metric.vmafScore)
+                        )
+                        .foregroundStyle(.blue)
+                        
+                        // Interactive points
+                        PointMark(
+                            x: .value("Time", metric.timestamp),
+                            y: .value("VMAF", metric.vmafScore)
+                        )
+                        .foregroundStyle(hoveredFrame?.frameNumber == metric.frameNumber ? .blue : .blue.opacity(0.3))
+                        .symbol(.circle)
+                        .symbolSize(hoveredFrame?.frameNumber == metric.frameNumber ? 30 : 20)
                     }
-                }
-                .chartYAxis {
-                    AxisMarks(values: .stride(by: 10)) { value in
-                        if let score = value.as(Double.self) {
-                            AxisValueLabel(String(format: "%.0f", score))
-                                .font(.system(size: 9))  // Smaller font
-                        }
-                        AxisGridLine()
-                            .foregroundStyle(.gray.opacity(0.1))
-                    }
-                }
-                .chartOverlay { proxy in
-                    GeometryReader { geometry in
-                        Rectangle().fill(.clear).contentShape(Rectangle())
-                            .onAppear {
-                                chartProxy = proxy
+                    .chartXScale(domain: displayRange)
+                    .chartYScale(domain: yAxisRange)
+                    .animation(.easeInOut(duration: 0.2), value: displayRange)
+                    .animation(.easeInOut(duration: 0.2), value: zoomLevel)
+                    .chartXAxis {
+                        AxisMarks(values: .stride(by: 1)) { value in
+                            if let time = value.as(TimeInterval.self) {
+                                AxisValueLabel(formatTime(time))
+                                    .font(.system(size: 9))  // Smaller font
                             }
-                            .onContinuousHover { phase in
-                                switch phase {
-                                case .active(let location):
-                                    if let (frame, distance) = findNearestFrame(at: location, in: geometry, proxy: proxy),
-                                       distance < 10 { // Only select if within 10 points of the dot
-                                        withAnimation(.easeOut(duration: 0.1)) {
-                                            hoveredFrame = frame
+                        }
+                    }
+                    .chartYAxis {
+                        AxisMarks(values: .stride(by: 10)) { value in
+                            if let score = value.as(Double.self) {
+                                AxisValueLabel(String(format: "%.0f", score))
+                                    .font(.system(size: 9))  // Smaller font
+                            }
+                            AxisGridLine()
+                                .foregroundStyle(.gray.opacity(0.1))
+                        }
+                    }
+                    .chartOverlay { proxy in
+                        GeometryReader { geometry in
+                            Rectangle().fill(.clear).contentShape(Rectangle())
+                                .onAppear {
+                                    chartProxy = proxy
+                                }
+                                .onContinuousHover { phase in
+                                    switch phase {
+                                    case .active(let location):
+                                        if let (frame, distance) = findNearestFrame(at: location, in: geometry, proxy: proxy),
+                                           distance < 10 { // Only select if within 10 points of the dot
+                                            withAnimation(.easeOut(duration: 0.1)) {
+                                                hoveredFrame = frame
+                                            }
+                                        } else {
+                                            withAnimation(.easeOut(duration: 0.1)) {
+                                                hoveredFrame = nil
+                                            }
                                         }
-                                    } else {
+                                    case .ended:
                                         withAnimation(.easeOut(duration: 0.1)) {
                                             hoveredFrame = nil
                                         }
                                     }
-                                case .ended:
-                                    withAnimation(.easeOut(duration: 0.1)) {
-                                        hoveredFrame = nil
-                                    }
                                 }
-                            }
+                        }
+                    }
+                    
+                    // Hover details popup
+                    if let frame = hoveredFrame, let proxy = chartProxy {
+                        GeometryReader { geometry in
+                            frameDetailsView(frame: frame)
+                                .padding(4)
+                                .background(Color(nsColor: .controlBackgroundColor))
+                                .cornerRadius(4)
+                                .shadow(radius: 2)
+                                .offset(x: calculateHoverBoxOffset(for: frame, in: geometry),
+                                        y: calculateVerticalPosition(for: frame, in: geometry, proxy: proxy))
+                                .animation(.easeOut(duration: 0.1), value: frame.frameNumber)
+                        }
                     }
                 }
-                
-                // Hover details popup
-                if let frame = hoveredFrame, let proxy = chartProxy {
-                    GeometryReader { geometry in
-                        frameDetailsView(frame: frame)
-                            .padding(4)
-                            .background(Color(nsColor: .controlBackgroundColor))
-                            .cornerRadius(4)
-                            .shadow(radius: 2)
-                            .offset(x: calculateHoverBoxOffset(for: frame, in: geometry),
-                                    y: calculateVerticalPosition(for: frame, in: geometry, proxy: proxy))
-                            .animation(.easeOut(duration: 0.1), value: frame.frameNumber)
-                    }
-                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(4)
             }
-            .frame(minHeight: 120)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .cornerRadius(4)
+            .frame(minHeight: 120, maxHeight: .infinity)
             
             // Info and controls
             HStack {
@@ -231,6 +234,7 @@ struct VMAFGraphView: View {
             }
         }
         .padding(4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
     }
     

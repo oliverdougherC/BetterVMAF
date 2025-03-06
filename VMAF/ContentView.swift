@@ -21,13 +21,14 @@ struct VMAFView: View {
     @State private var vmafResult: VMAFCalculator.VMAFResult?
     @State private var isCalculating = false
     @State private var errorMessage: String?
+    @State private var showGraph = false  // Graph hidden by default
     
     private let calculator = VMAFCalculator()
     
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 16) {
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: 16) {
                     Text("Better VMAF")
                         .font(.title)
                         .padding(.top)
@@ -111,9 +112,19 @@ struct VMAFView: View {
                     // Results Section
                     if let result = vmafResult {
                         VStack(alignment: .leading, spacing: 16) {
-                            Text("Results")
-                                .font(.headline)
-                                .foregroundColor(.secondary)
+                            HStack {
+                                Text("Results")
+                                    .font(.headline)
+                                    .foregroundColor(.secondary)
+                                
+                                Spacer()
+                                
+                                Toggle(isOn: $showGraph) {
+                                    Label("Show Graph", systemImage: "chart.xyaxis.line")
+                                }
+                                .toggleStyle(.button)
+                                .controlSize(.small)
+                            }
                             
                             VStack(alignment: .leading, spacing: 12) {
                                 ResultRow(title: "VMAF Score", value: result.score)
@@ -121,9 +132,11 @@ struct VMAFView: View {
                                 ResultRow(title: "Harmonic Mean", value: result.harmonicMean)
                             }
                             
-                            // Graph View
-                            VMAFGraphView(frameMetrics: result.frameMetrics)
-                                .frame(minHeight: 500)
+                            // Graph View (only shown when toggled)
+                            if showGraph {
+                                VMAFGraphView(frameMetrics: result.frameMetrics)
+                                    .frame(minHeight: 300, maxHeight: 500)
+                            }
                         }
                         .padding()
                         .background(Color(nsColor: .controlBackgroundColor))
@@ -144,7 +157,7 @@ struct VMAFView: View {
                 .padding()
             }
         }
-        .frame(minWidth: 800, minHeight: 800)
+        .frame(minWidth: 500, minHeight: 400)  // Reduced minimum size
         .background(Color(nsColor: .windowBackgroundColor))
     }
     
