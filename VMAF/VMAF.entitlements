@@ -15,9 +15,6 @@
 	<key>com.apple.security.files.home-relative-path.read-only</key>
 	<array>
 		<string>opt/homebrew/bin/ffmpeg</string>
-		<string>opt/homebrew/lib</string>
-		<string>opt/homebrew/opt/ffmpeg/lib</string>
-		<string>opt/homebrew/Cellar/ffmpeg/7.1-with-options_4/lib</string>
 	</array>
 	<key>com.apple.security.files.home-relative-path.read-write</key>
 	<array>

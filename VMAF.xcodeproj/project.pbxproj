@@ -23,90 +23,15 @@
 		};
 /* End PBXContainerItemProxy section */
 
-/* Begin PBXCopyFilesBuildPhase section */
-		339E19432D77EDC4008B143B /* Copy lib Directory */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = lib;
-			dstSubfolderSpec = 7;
-			files = (
-			);
-			name = "Copy lib Directory";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
-
 /* Begin PBXFileReference section */
 		33175F6E2D77B32600B364A8 /* Better VMAF.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Better VMAF.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		33175F7F2D77B32700B364A8 /* VMAFTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = VMAFTests.xctest; path = "Better VMAF Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		33175F892D77B32700B364A8 /* VMAFUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = VMAFUITests.xctest; path = "Better VMAF UI Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-		33BEEA162D78FE7E00F4D8C5 /* Exceptions for "VMAF" folder in "Copy lib Directory" phase from "VMAF" target */ = {
-			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
-			attributesByRelativePath = {
-				Resources/lib/libavcodec.61.19.100.dylib = (CodeSignOnCopy, );
-				Resources/lib/libavcodec.61.dylib = (CodeSignOnCopy, );
-				Resources/lib/libavcodec.dylib = (CodeSignOnCopy, );
-				Resources/lib/libavdevice.61.3.100.dylib = (CodeSignOnCopy, );
-				Resources/lib/libavdevice.61.dylib = (CodeSignOnCopy, );
-				Resources/lib/libavdevice.dylib = (CodeSignOnCopy, );
-				Resources/lib/libavfilter.10.4.100.dylib = (CodeSignOnCopy, );
-				Resources/lib/libavfilter.10.dylib = (CodeSignOnCopy, );
-				Resources/lib/libavfilter.dylib = (CodeSignOnCopy, );
-				Resources/lib/libavformat.61.7.100.dylib = (CodeSignOnCopy, );
-				Resources/lib/libavformat.61.dylib = (CodeSignOnCopy, );
-				Resources/lib/libavformat.dylib = (CodeSignOnCopy, );
-				Resources/lib/libavutil.59.39.100.dylib = (CodeSignOnCopy, );
-				Resources/lib/libavutil.59.dylib = (CodeSignOnCopy, );
-				Resources/lib/libavutil.dylib = (CodeSignOnCopy, );
-				Resources/lib/libpostproc.58.3.100.dylib = (CodeSignOnCopy, );
-				Resources/lib/libpostproc.58.dylib = (CodeSignOnCopy, );
-				Resources/lib/libpostproc.dylib = (CodeSignOnCopy, );
-				Resources/lib/libswresample.5.3.100.dylib = (CodeSignOnCopy, );
-				Resources/lib/libswresample.5.dylib = (CodeSignOnCopy, );
-				Resources/lib/libswresample.dylib = (CodeSignOnCopy, );
-				Resources/lib/libswscale.8.3.100.dylib = (CodeSignOnCopy, );
-				Resources/lib/libswscale.8.dylib = (CodeSignOnCopy, );
-				Resources/lib/libswscale.dylib = (CodeSignOnCopy, );
-			};
-			buildPhase = 339E19432D77EDC4008B143B /* Copy lib Directory */;
-			membershipExceptions = (
-				Resources/lib/libavcodec.61.19.100.dylib,
-				Resources/lib/libavcodec.61.dylib,
-				Resources/lib/libavcodec.dylib,
-				Resources/lib/libavdevice.61.3.100.dylib,
-				Resources/lib/libavdevice.61.dylib,
-				Resources/lib/libavdevice.dylib,
-				Resources/lib/libavfilter.10.4.100.dylib,
-				Resources/lib/libavfilter.10.dylib,
-				Resources/lib/libavfilter.dylib,
-				Resources/lib/libavformat.61.7.100.dylib,
-				Resources/lib/libavformat.61.dylib,
-				Resources/lib/libavformat.dylib,
-				Resources/lib/libavutil.59.39.100.dylib,
-				Resources/lib/libavutil.59.dylib,
-				Resources/lib/libavutil.dylib,
-				Resources/lib/libpostproc.58.3.100.dylib,
-				Resources/lib/libpostproc.58.dylib,
-				Resources/lib/libpostproc.dylib,
-				Resources/lib/libswresample.5.3.100.dylib,
-				Resources/lib/libswresample.5.dylib,
-				Resources/lib/libswresample.dylib,
-				Resources/lib/libswscale.8.3.100.dylib,
-				Resources/lib/libswscale.8.dylib,
-				Resources/lib/libswscale.dylib,
-			);
-		};
-/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		33175F702D77B32600B364A8 /* VMAF */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				33BEEA162D78FE7E00F4D8C5 /* Exceptions for "VMAF" folder in "Copy lib Directory" phase from "VMAF" target */,
-			);
 			path = VMAF;
 			sourceTree = "<group>";
 		};
@@ -177,7 +102,6 @@
 				33175F6A2D77B32600B364A8 /* Sources */,
 				33175F6B2D77B32600B364A8 /* Frameworks */,
 				33175F6C2D77B32600B364A8 /* Resources */,
-				339E19432D77EDC4008B143B /* Copy lib Directory */,
 			);
 			buildRules = (
 			);
@@ -484,10 +408,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/VMAF/Resources/lib",
-				);
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = neurophasia.BetterVMAF;
 				PRODUCT_NAME = "Better VMAF";
@@ -517,10 +438,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/VMAF/Resources/lib",
-				);
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = neurophasia.BetterVMAF;
 				PRODUCT_NAME = "Better VMAF";

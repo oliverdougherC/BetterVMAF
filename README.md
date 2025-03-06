@@ -15,7 +15,7 @@ A native macOS application for calculating VMAF (Video Multi-Method Assessment F
 ## System Requirements
 
 - macOS 13.0 or later
-- FFmpeg with libvmaf support (included in the app bundle)
+- Self-contained FFmpeg binary with libvmaf support (included in the app bundle)
 
 ## Installation
 
@@ -25,10 +25,10 @@ A native macOS application for calculating VMAF (Video Multi-Method Assessment F
 4. The first time you run the app, you'll need to:
    - Open the app
    - Select "Done" on the security pop-up
-   - Naviagte to System Settings > Security and Privacy
+   - Navigate to System Settings > Security and Privacy
    - Scroll down to the "Security" section
    - Press "Open Anyway" next to the Better VMAF warning
-   - Provide your fingerprint or adminstator password
+   - Provide your fingerprint or administrator password
 
 This is necessary because the app is not signed with an Apple Developer ID. You only need to do this once.
 
@@ -60,7 +60,7 @@ To create a DMG for distribution:
 
 ## How It Works
 
-Better VMAF uses FFmpeg with the libvmaf library to calculate video quality metrics. The app provides a simple interface for:
+Better VMAF uses a self-contained FFmpeg binary with the libvmaf library to calculate video quality metrics. The app provides a simple interface for:
 1. Selecting a reference video (original/high quality)
 2. Selecting a comparison video (to be evaluated)
 3. Calculating and displaying VMAF scores

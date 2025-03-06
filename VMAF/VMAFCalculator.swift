@@ -167,9 +167,17 @@ class VMAFCalculator {
         // Get the path to ffmpeg in the app bundle
         if let bundlePath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) {
             ffmpegPath = bundlePath
+            print("Using bundled ffmpeg at path: \(bundlePath)")
+            
+            // Make the binary executable
+            let result = chmod(bundlePath.cString(using: .utf8)!, 0o755)
+            if result != 0 {
+                print("Warning: Failed to make ffmpeg executable: \(String(cString: strerror(errno)))")
+            }
         } else {
             // Fallback to system ffmpeg if not found in bundle
             ffmpegPath = "/opt/homebrew/bin/ffmpeg"
+            print("Warning: Using system ffmpeg at path: \(ffmpegPath)")
         }
     }
     
@@ -199,10 +207,22 @@ class VMAFCalculator {
         process.executableURL = URL(fileURLWithPath: command[0])
         process.arguments = Array(command.dropFirst())
         
-        // Set up environment variables
+        // Set up environment variables to ensure we use bundled libraries
         var env = ProcessInfo.processInfo.environment
-        if let libPath = Bundle.main.path(forResource: "lib", ofType: nil) {
-            env["DYLD_LIBRARY_PATH"] = libPath
+        if let resourcePath = Bundle.main.resourcePath {
+            print("Setting up environment variables:")
+            print("  Resource path: \(resourcePath)")
+            
+            // Set DYLD_LIBRARY_PATH to look in the app bundle first
+            let libraryPath = "\(resourcePath)"
+            print("  Setting DYLD_LIBRARY_PATH: \(libraryPath)")
+            env["DYLD_LIBRARY_PATH"] = libraryPath
+            
+            // Set DYLD_FALLBACK_LIBRARY_PATH as a backup
+            env["DYLD_FALLBACK_LIBRARY_PATH"] = "/usr/lib:/usr/local/lib:/opt/homebrew/lib"
+            
+            // Set DYLD_FRAMEWORK_PATH
+            env["DYLD_FRAMEWORK_PATH"] = resourcePath
         }
         process.environment = env
         
