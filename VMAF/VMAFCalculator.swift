@@ -21,6 +21,14 @@ class VMAFCalculator {
         let frameCount: Int
     }
     
+    // Add delegate for progress updates
+    protocol VMAFCalculatorDelegate {
+        func vmafCalculatorDidUpdateProgress(frameCount: Int, fps: Double, progress: Double)
+    }
+    
+    var delegate: VMAFCalculatorDelegate?
+    private var lastCommand: String = ""
+    
     struct FrameMetric: Codable, Identifiable {
         let frameNumber: Int
         let vmafScore: Double
@@ -169,10 +177,23 @@ class VMAFCalculator {
             ffmpegPath = bundlePath
             print("Using bundled ffmpeg at path: \(bundlePath)")
             
-            // Make the binary executable
-            let result = chmod(bundlePath.cString(using: .utf8)!, 0o755)
-            if result != 0 {
-                print("Warning: Failed to make ffmpeg executable: \(String(cString: strerror(errno)))")
+            // Make the binary executable - note that in a sandboxed app, we can't modify permissions
+            // We need to rely on the app being properly code signed with the ffmpeg executable
+            // already having the proper permissions set during the build process
+            
+            // Check if the file is executable
+            var isExecutable = false
+            let fileManager = FileManager.default
+            if let attributes = try? fileManager.attributesOfItem(atPath: bundlePath),
+               let posixPermissions = attributes[.posixPermissions] as? NSNumber {
+                let permissions = posixPermissions.intValue
+                isExecutable = (permissions & 0o111) != 0 // Check if any execute bit is set
+            }
+            
+            if !isExecutable {
+                print("Warning: ffmpeg does not have executable permissions. Using alternative approach.")
+                // Instead of trying to chmod, we'll try to use the executable through a different mechanism
+                // or fallback to system ffmpeg
             }
         } else {
             // Fallback to system ffmpeg if not found in bundle
@@ -189,18 +210,24 @@ class VMAFCalculator {
         // Ensure the temporary directory exists and is writable
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         
+        let lavfiFilterGraph = "[1:v]setpts=PTS-STARTPTS[dist];[0:v]setpts=PTS-STARTPTS[ref];[dist][ref]libvmaf=log_fmt=json:log_path=\(logFile.path):n_threads=99"
+        
+        
         // Build the ffmpeg command with enhanced metrics collection
         let command = [
-            ffmpegPath,
-            "-hide_banner",
-            "-i", referenceVideo.path,
-            "-i", comparisonVideo.path,
-            "-lavfi", "libvmaf=log_fmt=json:log_path=\(logFile.path):n_threads=4",
-            "-f", "null",
-            "-"
+            ffmpegPath,                  // Your variable for the FFmpeg executable path
+            "-hide_banner",              // Optional: Hides version/build info
+            "-i", referenceVideo.path,   // Input 0 [0:v] - The Reference Video
+            "-i", comparisonVideo.path,  // Input 1 [1:v] - The Video to Compare (Distorted)
+            "-lavfi", lavfiFilterGraph,  // Use the explicitly mapped complex filtergraph
+            "-f", "null",                // Don't create an output video file
+            "-"                          // Pipe output (though -f null makes this less relevant here)
         ]
         
-        print("Running FFmpeg command: \(command.joined(separator: " "))")
+        // Store the command for later display
+        lastCommand = command.joined(separator: " ")
+        
+        print("Running FFmpeg command: \(lastCommand)")
         
         // Run the command
         let process = Process()
@@ -226,23 +253,67 @@ class VMAFCalculator {
         }
         process.environment = env
         
+        // Check if we can run ffmpeg directly or need to use a helper shell
+        if !FileManager.default.isExecutableFile(atPath: command[0]) {
+            // If ffmpeg is not executable directly, try using bash to execute it
+            print("ffmpeg not directly executable, trying via /bin/sh")
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            process.arguments = ["-c", command.joined(separator: " ")]
+        }
+        
         let pipe = Pipe()
         process.standardError = pipe
+        
+        // Set up a file handle to monitor stderr for progress updates
+        let fileHandle = pipe.fileHandleForReading
+        
+        // Setup a notification to read stderr data as it becomes available
+        NotificationCenter.default.addObserver(forName: .NSFileHandleDataAvailable, object: fileHandle, queue: .main) { [weak self] _ in
+            let data = fileHandle.availableData
+            if !data.isEmpty {
+                if let output = String(data: data, encoding: .utf8) {
+                    // Parse progress information from ffmpeg output
+                    self?.parseFFmpegOutput(output)
+                }
+                fileHandle.waitForDataInBackgroundAndNotify()
+            }
+        }
+        fileHandle.waitForDataInBackgroundAndNotify()
         
         do {
             try process.run()
             
-            // Read error output
+            // Wait for process to complete
+            process.waitUntilExit()
+            
+            // Clean up notification observer
+            NotificationCenter.default.removeObserver(self, name: .NSFileHandleDataAvailable, object: fileHandle)
+            
+            // Read all error output
             let errorData = try pipe.fileHandleForReading.readToEnd() ?? Data()
             let errorString = String(data: errorData, encoding: .utf8) ?? "Unknown error"
             print("FFmpeg output: \(errorString)")
             
-            process.waitUntilExit()
-            
             // Check if process failed
             if process.terminationStatus != 0 {
                 print("FFmpeg failed with status: \(process.terminationStatus)")
-                throw VMAFError.ffmpegError(errorString)
+                
+                // Provide more detailed error information
+                var errorMessage = errorString
+                if errorString.isEmpty {
+                    switch process.terminationStatus {
+                    case 126:
+                        throw VMAFError.permissionDenied
+                    case 127:
+                        throw VMAFError.executableNotFound
+                    case 234:
+                        throw VMAFError.sandboxViolation
+                    default:
+                        errorMessage = "FFmpeg exited with status: \(process.terminationStatus)"
+                    }
+                }
+                
+                throw VMAFError.ffmpegError(errorMessage)
             }
             
             // Read and parse the JSON log file
@@ -279,6 +350,62 @@ class VMAFCalculator {
             throw error
         }
     }
+    
+    // Parse ffmpeg output to extract frame progress information
+    private func parseFFmpegOutput(_ output: String) {
+        // Example of ffmpeg output: 
+        // "frame=  301 fps= 65 q=-0.0 size=N/A time=00:00:10.03 bitrate=N/A speed=2.17x"
+        let lines = output.split(separator: "\n")
+        for line in lines {
+            if line.contains("frame=") && line.contains("fps=") {
+                let components = line.split(separator: " ").filter { !$0.isEmpty }
+                
+                var frameCount = 0
+                var fps = 0.0
+                var timeString = ""
+                
+                for i in 0..<components.count - 1 {
+                    if components[i] == "frame=" {
+                        if let count = Int(components[i+1].trimmingCharacters(in: .whitespaces)) {
+                            frameCount = count
+                        }
+                    } else if components[i] == "fps=" {
+                        if let fpsValue = Double(components[i+1].trimmingCharacters(in: .whitespaces)) {
+                            fps = fpsValue
+                        }
+                    } else if components[i] == "time=" {
+                        timeString = String(components[i+1])
+                    }
+                }
+                
+                // Calculate progress percentage if we have time information
+                var progress = 0.0
+                if !timeString.isEmpty {
+                    // Parse time string like "00:00:10.03"
+                    let timeParts = timeString.split(separator: ":")
+                    if timeParts.count == 3, 
+                       let hours = Double(timeParts[0]),
+                       let minutes = Double(timeParts[1]),
+                       let seconds = Double(timeParts[2]) {
+                        
+                        let totalSeconds = hours * 3600 + minutes * 60 + seconds
+                        // Estimate progress (assuming we know total duration, otherwise use indeterminate progress)
+                        progress = totalSeconds / 100.0 // Just a placeholder, would be better with actual video duration
+                    }
+                }
+                
+                // Notify delegate of progress update
+                DispatchQueue.main.async { [weak self] in
+                    self?.delegate?.vmafCalculatorDidUpdateProgress(frameCount: frameCount, fps: fps, progress: progress)
+                }
+            }
+        }
+    }
+    
+    // Return the last ffmpeg command that was run
+    func getLastCommand() -> String {
+        return lastCommand
+    }
 }
 
 // MARK: - Supporting Types
@@ -286,5 +413,23 @@ extension VMAFCalculator {
     enum VMAFError: Error {
         case missingMetrics
         case ffmpegError(String)
+        case permissionDenied
+        case executableNotFound
+        case sandboxViolation
+        
+        var localizedDescription: String {
+            switch self {
+            case .missingMetrics:
+                return "VMAF metrics could not be found in the output"
+            case .ffmpegError(let message):
+                return "FFmpeg error: \(message)"
+            case .permissionDenied:
+                return "Permission denied: Cannot execute ffmpeg. Make sure ffmpeg is properly signed during build."
+            case .executableNotFound:
+                return "FFmpeg executable not found. Make sure it's included in the app bundle."
+            case .sandboxViolation:
+                return "Sandbox violation: The app doesn't have permission to run ffmpeg. Check entitlements and code signing."
+            }
+        }
     }
 } 

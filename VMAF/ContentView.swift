@@ -25,6 +25,13 @@ struct VMAFView: View {
     @State private var visualizationType: VisualizationType = .line
     @State private var showExportOptions = false
     
+    // New state variables for progress display
+    @State private var currentFrame: Int = 0
+    @State private var currentFPS: Double = 0
+    @State private var progress: Double = 0
+    @State private var showCommandSheet = false
+    @State private var ffmpegCommand: String = ""
+    
     private let calculator = VMAFCalculator()
     
     enum VisualizationType {
@@ -115,6 +122,34 @@ struct VMAFView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(referenceVideo == nil || comparisonVideo == nil || isCalculating)
                     .controlSize(.large)
+                    
+                    // Progress Display (Only visible when calculating)
+                    if isCalculating {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ProgressView(value: progress > 0 ? progress / 100 : nil)
+                                .progressViewStyle(.linear)
+                            
+                            HStack {
+                                Text("Progress: Frame \(currentFrame)")
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text("\(String(format: "%.1f", currentFPS)) FPS")
+                                    .foregroundColor(.secondary)
+                            }
+                            .font(.caption)
+                            
+                            Button("Show FFmpeg Command") {
+                                ffmpegCommand = calculator.getLastCommand()
+                                showCommandSheet = true
+                            }
+                            .buttonStyle(.bordered)
+                            .font(.caption)
+                        }
+                        .padding()
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .cornerRadius(8)
+                        .padding(.horizontal)
+                    }
                     
                     // Results Section
                     if let result = vmafResult {
@@ -220,6 +255,29 @@ struct VMAFView: View {
         .sheet(isPresented: $showExportOptions) {
             ExportOptionsView(result: vmafResult!)
         }
+        .sheet(isPresented: $showCommandSheet) {
+            VStack(spacing: 16) {
+                Text("FFmpeg Command")
+                    .font(.headline)
+                
+                ScrollView {
+                    Text(ffmpegCommand)
+                        .font(.system(.body, design: .monospaced))
+                        .padding()
+                        .textSelection(.enabled)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(nsColor: .textBackgroundColor))
+                .cornerRadius(8)
+                
+                Button("Close") {
+                    showCommandSheet = false
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding()
+            .frame(width: 600, height: 300)
+        }
     }
     
     private func selectVideo(for keyPath: ReferenceWritableKeyPath<VMAFView, URL?>) {
@@ -247,6 +305,12 @@ struct VMAFView: View {
         
         isCalculating = true
         errorMessage = nil
+        currentFrame = 0
+        currentFPS = 0
+        progress = 0
+        
+        // Set self as delegate to receive progress updates
+        calculator.delegate = self
         
         Task {
             do {
@@ -257,6 +321,8 @@ struct VMAFView: View {
                 await MainActor.run {
                     self.vmafResult = result
                     self.isCalculating = false
+                    // Make sure we have the command even after calculation completes
+                    self.ffmpegCommand = calculator.getLastCommand()
                 }
             } catch {
                 await MainActor.run {
@@ -265,6 +331,20 @@ struct VMAFView: View {
                 }
             }
         }
+        
+        // Get the command as soon as calculation starts
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.ffmpegCommand = calculator.getLastCommand()
+        }
+    }
+}
+
+// Add conformance to VMAFCalculatorDelegate
+extension VMAFView: VMAFCalculator.VMAFCalculatorDelegate {
+    func vmafCalculatorDidUpdateProgress(frameCount: Int, fps: Double, progress: Double) {
+        self.currentFrame = frameCount
+        self.currentFPS = fps
+        self.progress = progress
     }
 }
 
