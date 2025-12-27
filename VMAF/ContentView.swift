@@ -7,11 +7,22 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import AppKit
 
 struct ContentView: View {
     var body: some View {
-        VMAFView()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        TabView {
+            VMAFView()
+                .tabItem {
+                    Label("Single", systemImage: "1.circle")
+                }
+            
+            VMAFBatchView()
+                .tabItem {
+                    Label("Batch", systemImage: "tray.full")
+                }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -21,6 +32,9 @@ struct VMAFView: View {
     @State private var vmafResult: VMAFCalculator.VMAFResult?
     @State private var isCalculating = false
     @State private var errorMessage: String?
+    @State private var errorDetails: String?
+    @State private var showErrorDetails = false
+    @State private var ffmpegExitStatus: Int32?
     @State private var showGraph = false  // Graph hidden by default
     @State private var visualizationType: VisualizationType = .line
     @State private var showExportOptions = false
@@ -29,6 +43,7 @@ struct VMAFView: View {
     @State private var currentFrame: Int = 0
     @State private var currentFPS: Double = 0
     @State private var progress: Double = 0
+    @State private var totalFrames: Int?
     @State private var showCommandSheet = false
     @State private var ffmpegCommand: String = ""
     
@@ -56,7 +71,7 @@ struct VMAFView: View {
                         // Reference Video Selection
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Reference Video")
+                                Text("Reference Video (Original)")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                                 if let url = referenceVideo {
@@ -83,7 +98,7 @@ struct VMAFView: View {
                         // Comparison Video Selection
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Comparison Video")
+                                Text("Comparison Video (Encoded)")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                                 if let url = comparisonVideo {
@@ -130,8 +145,17 @@ struct VMAFView: View {
                                 .progressViewStyle(.linear)
                             
                             HStack {
-                                Text("Progress: Frame \(currentFrame)")
-                                    .foregroundColor(.secondary)
+                                if let total = totalFrames, total > 0 {
+                                    Text("Progress: Frame \(currentFrame) of \(total)")
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    let percent = min(100, max(0, Double(currentFrame) / Double(total) * 100))
+                                    Text(String(format: "%.1f%%", percent))
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Text("Progress: Frame \(currentFrame)")
+                                        .foregroundColor(.secondary)
+                                }
                                 Spacer()
                                 Text("\(String(format: "%.1f", currentFPS)) FPS")
                                     .foregroundColor(.secondary)
@@ -238,13 +262,43 @@ struct VMAFView: View {
                     }
                     
                     if let error = errorMessage {
-                        Text(error)
-                            .font(.callout)
-                            .foregroundColor(.red)
-                            .padding()
-                            .background(Color(nsColor: .controlBackgroundColor))
-                            .cornerRadius(8)
-                            .padding(.horizontal)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(error)
+                                .font(.callout)
+                                .foregroundColor(.red)
+                            
+                            HStack(spacing: 8) {
+                                Button(action: { copyErrorToClipboard(errorDetails ?? error) }) {
+                                    Label("Copy Error", systemImage: "doc.on.doc")
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                
+                                if let details = errorDetails, !details.isEmpty {
+                                    Button(action: { showErrorDetails.toggle() }) {
+                                        Label(showErrorDetails ? "Hide Details" : "Show Details", systemImage: "info.circle")
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                                }
+                            }
+                            
+                            if showErrorDetails, let details = errorDetails {
+                                ScrollView {
+                                    Text(details)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .frame(maxHeight: 200)
+                                .padding(8)
+                                .background(Color(nsColor: .textBackgroundColor))
+                                .cornerRadius(6)
+                            }
+                        }
+                        .padding()
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .cornerRadius(8)
+                        .padding(.horizontal)
                     }
                 }
                 .padding()
@@ -305,9 +359,13 @@ struct VMAFView: View {
         
         isCalculating = true
         errorMessage = nil
+        errorDetails = nil
+        showErrorDetails = false
+        ffmpegExitStatus = nil
         currentFrame = 0
         currentFPS = 0
         progress = 0
+        totalFrames = nil
         
         // Set self as delegate to receive progress updates
         calculator.delegate = self
@@ -327,6 +385,8 @@ struct VMAFView: View {
             } catch {
                 await MainActor.run {
                     self.errorMessage = error.localizedDescription
+                    self.errorDetails = buildErrorDetails(error: error)
+                    self.ffmpegExitStatus = calculator.getLastTerminationStatus()
                     self.isCalculating = false
                 }
             }
@@ -337,14 +397,47 @@ struct VMAFView: View {
             self.ffmpegCommand = calculator.getLastCommand()
         }
     }
+    
+    private func copyErrorToClipboard(_ message: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(message, forType: .string)
+    }
+    
+    private func buildErrorDetails(error: Error) -> String {
+        var parts: [String] = []
+        parts.append("Error: \(error.localizedDescription)")
+        parts.append("Raw: \(String(describing: error))")
+        
+        if let status = calculator.getLastTerminationStatus() {
+            parts.append("FFmpeg exit status: \(status)")
+        }
+        
+        let ffmpegOutput = calculator.getLastErrorOutput()
+        if !ffmpegOutput.isEmpty {
+            parts.append("FFmpeg Output:\n\(ffmpegOutput)")
+        }
+        
+        let command = calculator.getLastCommand()
+        if !command.isEmpty {
+            parts.append("Last Command:\n\(command)")
+        }
+        
+        return parts.joined(separator: "\n\n")
+    }
 }
 
 // Add conformance to VMAFCalculatorDelegate
 extension VMAFView: VMAFCalculator.VMAFCalculatorDelegate {
-    func vmafCalculatorDidUpdateProgress(frameCount: Int, fps: Double, progress: Double) {
+    func vmafCalculatorDidUpdateProgress(frameCount: Int, fps: Double, progress: Double, totalFrames: Int) {
         self.currentFrame = frameCount
         self.currentFPS = fps
-        self.progress = progress
+        self.totalFrames = totalFrames > 0 ? totalFrames : nil
+        if let total = self.totalFrames, total > 0 {
+            self.progress = min(100, max(0, Double(frameCount) / Double(total) * 100))
+        } else {
+            self.progress = progress
+        }
     }
 }
 

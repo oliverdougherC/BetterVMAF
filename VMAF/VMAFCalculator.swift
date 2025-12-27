@@ -23,11 +23,14 @@ class VMAFCalculator {
     
     // Add delegate for progress updates
     protocol VMAFCalculatorDelegate {
-        func vmafCalculatorDidUpdateProgress(frameCount: Int, fps: Double, progress: Double)
+        func vmafCalculatorDidUpdateProgress(frameCount: Int, fps: Double, progress: Double, totalFrames: Int)
     }
     
     var delegate: VMAFCalculatorDelegate?
     private var lastCommand: String = ""
+    private var lastErrorOutput: String = ""
+    private var lastTerminationStatus: Int32?
+    private var estimatedTotalFrames: Int = 0
     
     struct FrameMetric: Codable, Identifiable {
         let frameNumber: Int
@@ -171,6 +174,79 @@ class VMAFCalculator {
     
     private let ffmpegPath: String
     
+    // Determine the resolution of a video to validate inputs and choose the right model.
+    private func videoResolution(for url: URL) async throws -> (width: Int, height: Int) {
+        let asset = AVURLAsset(url: url)
+        let tracks = try await asset.loadTracks(withMediaType: .video)
+        guard let track = tracks.first else {
+            throw VMAFError.missingVideoTrack
+        }
+        
+        let naturalSize = try await track.load(.naturalSize)
+        let transform = try await track.load(.preferredTransform)
+        let transformedSize = naturalSize.applying(transform)
+        let width = Int(round(abs(transformedSize.width)))
+        let height = Int(round(abs(transformedSize.height)))
+        return (width: width, height: height)
+    }
+    
+    // Pick the matching VMAF model name based on resolution (defaults to 1080p model).
+    private func modelName(for resolution: (width: Int, height: Int)) -> String {
+        let longestSide = max(resolution.width, resolution.height)
+        return longestSide >= 2160 ? "vmaf_4k_v0.6.1" : "vmaf_v0.6.1"
+    }
+    
+    // Escape paths for use inside an ffmpeg filter string.
+    private func escapeForFFmpegFilter(_ path: String) -> String {
+        var escaped = path.replacingOccurrences(of: "\\", with: "\\\\")
+        escaped = escaped.replacingOccurrences(of: ":", with: "\\:")
+        escaped = escaped.replacingOccurrences(of: "'", with: "\\'")
+        escaped = escaped.replacingOccurrences(of: " ", with: "\\ ")
+        return escaped
+    }
+    
+    // Resolve the on-disk model path inside the app bundle.
+    private func modelPath(for resolution: (width: Int, height: Int)) throws -> String {
+        let name = modelName(for: resolution)
+        let fm = FileManager.default
+        
+        // Preferred location: Resources/Models/<name>.json
+        if let url = Bundle.main.url(forResource: name, withExtension: "json", subdirectory: "Models"),
+           fm.fileExists(atPath: url.path) {
+            return url.path
+        }
+        
+        // Fallback: Resource root
+        if let url = Bundle.main.url(forResource: name, withExtension: "json"),
+           fm.fileExists(atPath: url.path) {
+            return url.path
+        }
+        
+        // Dev fallback: relative to working directory if running from Xcode without copy phase
+        let workingPath = "VMAF/Resources/Models/\(name).json"
+        if fm.fileExists(atPath: workingPath) {
+            return URL(fileURLWithPath: workingPath).path
+        }
+        
+        throw VMAFError.modelNotFound(name)
+    }
+    
+    // Estimate frame count based on duration and nominal frame rate.
+    private func estimateFrameCount(for url: URL) async -> Int? {
+        let asset = AVURLAsset(url: url)
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first else { return nil }
+        guard let duration = try? await asset.load(.duration) else { return nil }
+        guard let fps = try? await track.load(.nominalFrameRate) else { return nil }
+        
+        let durationSeconds = CMTimeGetSeconds(duration)
+        guard durationSeconds.isFinite, durationSeconds > 0, fps > 0 else { return nil }
+        return Int(round(durationSeconds * Double(fps)))
+    }
+    
+    func getEstimatedTotalFrames() -> Int? {
+        estimatedTotalFrames > 0 ? estimatedTotalFrames : nil
+    }
+    
     init() {
         // Get the path to ffmpeg in the app bundle
         if let bundlePath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) {
@@ -203,6 +279,31 @@ class VMAFCalculator {
     }
     
     func calculateVMAF(referenceVideo: URL, comparisonVideo: URL) async throws -> VMAFResult {
+        let referenceResolution = try await videoResolution(for: referenceVideo)
+        let comparisonResolution = try await videoResolution(for: comparisonVideo)
+        
+        guard referenceResolution == comparisonResolution else {
+            throw VMAFError.resolutionMismatch(
+                referenceWidth: referenceResolution.width,
+                referenceHeight: referenceResolution.height,
+                comparisonWidth: comparisonResolution.width,
+                comparisonHeight: comparisonResolution.height
+            )
+        }
+        
+        let selectedModelPath = try modelPath(for: referenceResolution)
+        let escapedModelPath = escapeForFFmpegFilter(selectedModelPath)
+        lastErrorOutput = ""
+        lastTerminationStatus = nil
+        estimatedTotalFrames = 0
+        
+        let refFrames = await estimateFrameCount(for: referenceVideo) ?? 0
+        let cmpFrames = await estimateFrameCount(for: comparisonVideo) ?? 0
+        let nonZeroEstimates = [refFrames, cmpFrames].filter { $0 > 0 }
+        if let minEstimate = nonZeroEstimates.min() {
+            estimatedTotalFrames = minEstimate
+        }
+        
         // Create a temporary file for the VMAF JSON log
         let tempDir = FileManager.default.temporaryDirectory
         let logFile = tempDir.appendingPathComponent(UUID().uuidString + ".json")
@@ -210,18 +311,21 @@ class VMAFCalculator {
         // Ensure the temporary directory exists and is writable
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         
-        let lavfiFilterGraph = "[1:v]setpts=PTS-STARTPTS[dist];[0:v]setpts=PTS-STARTPTS[ref];[dist][ref]libvmaf=log_fmt=json:log_path=\(logFile.path):n_threads=99"
+        let escapedLogPath = escapeForFFmpegFilter(logFile.path)
+        // libvmaf 3.x expects model=path=... rather than model_path=...
+        let lavfiFilterGraph = "[1:v]setpts=PTS-STARTPTS[dist];[0:v]setpts=PTS-STARTPTS[ref];[dist][ref]libvmaf=model=path=\(escapedModelPath):log_fmt=json:log_path=\(escapedLogPath):n_threads=99"
         
         
         // Build the ffmpeg command with enhanced metrics collection
         let command = [
-            ffmpegPath,                  // Your variable for the FFmpeg executable path
-            "-hide_banner",              // Optional: Hides version/build info
-            "-i", referenceVideo.path,   // Input 0 [0:v] - The Reference Video
-            "-i", comparisonVideo.path,  // Input 1 [1:v] - The Video to Compare (Distorted)
-            "-lavfi", lavfiFilterGraph,  // Use the explicitly mapped complex filtergraph
-            "-f", "null",                // Don't create an output video file
-            "-"                          // Pipe output (though -f null makes this less relevant here)
+            ffmpegPath,
+            "-hide_banner",
+            "-loglevel", "info",
+            "-i", referenceVideo.path,
+            "-i", comparisonVideo.path,
+            "-lavfi", lavfiFilterGraph,
+            "-f", "null",
+            "-"
         ]
         
         // Store the command for later display
@@ -261,37 +365,39 @@ class VMAFCalculator {
             process.arguments = ["-c", command.joined(separator: " ")]
         }
         
-        let pipe = Pipe()
-        process.standardError = pipe
+        let outputPipe = Pipe()
+        process.standardError = outputPipe
+        process.standardOutput = outputPipe
         
-        // Set up a file handle to monitor stderr for progress updates
-        let fileHandle = pipe.fileHandleForReading
-        
-        // Setup a notification to read stderr data as it becomes available
-        NotificationCenter.default.addObserver(forName: .NSFileHandleDataAvailable, object: fileHandle, queue: .main) { [weak self] _ in
-            let data = fileHandle.availableData
-            if !data.isEmpty {
-                if let output = String(data: data, encoding: .utf8) {
-                    // Parse progress information from ffmpeg output
-                    self?.parseFFmpegOutput(output)
-                }
-                fileHandle.waitForDataInBackgroundAndNotify()
+        // Collect combined stdout/stderr, and parse progress as chunks arrive.
+        let fileHandle = outputPipe.fileHandleForReading
+        let outputQueue = DispatchQueue(label: "ffmpeg-output-buffer")
+        var collectedData = Data()
+        fileHandle.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            if data.isEmpty { return }
+            outputQueue.async {
+                collectedData.append(data)
+            }
+            if let output = String(data: data, encoding: .utf8) {
+                self?.parseFFmpegOutput(output)
             }
         }
-        fileHandle.waitForDataInBackgroundAndNotify()
         
         do {
             try process.run()
             
             // Wait for process to complete
             process.waitUntilExit()
+            lastTerminationStatus = process.terminationStatus
             
-            // Clean up notification observer
-            NotificationCenter.default.removeObserver(self, name: .NSFileHandleDataAvailable, object: fileHandle)
+            // Stop readability handler
+            fileHandle.readabilityHandler = nil
             
-            // Read all error output
-            let errorData = try pipe.fileHandleForReading.readToEnd() ?? Data()
-            let errorString = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+            // Capture all output that was collected
+            let dataSnapshot: Data = outputQueue.sync { collectedData }
+            let errorString = String(data: dataSnapshot, encoding: .utf8) ?? "Unknown error"
+            lastErrorOutput = errorString
             print("FFmpeg output: \(errorString)")
             
             // Check if process failed
@@ -299,7 +405,12 @@ class VMAFCalculator {
                 print("FFmpeg failed with status: \(process.terminationStatus)")
                 
                 // Provide more detailed error information
-                var errorMessage = errorString
+                var errorMessage = !errorString.isEmpty ? errorString : "FFmpeg exited with status: \(process.terminationStatus)"
+                
+                if errorString.isEmpty {
+                    errorMessage = "FFmpeg exited with status: \(process.terminationStatus) (no stderr output captured)"
+                }
+                
                 if errorString.isEmpty {
                     switch process.terminationStatus {
                     case 126:
@@ -347,6 +458,13 @@ class VMAFCalculator {
             )
         } catch {
             print("Error during VMAF calculation: \(error)")
+            if lastErrorOutput.isEmpty {
+                var details = "Error: \(error)\n"
+                if let status = lastTerminationStatus {
+                    details += "FFmpeg exit status: \(status)\n"
+                }
+                lastErrorOutput = details
+            }
             throw error
         }
     }
@@ -396,7 +514,13 @@ class VMAFCalculator {
                 
                 // Notify delegate of progress update
                 DispatchQueue.main.async { [weak self] in
-                    self?.delegate?.vmafCalculatorDidUpdateProgress(frameCount: frameCount, fps: fps, progress: progress)
+                    let total = self?.estimatedTotalFrames ?? 0
+                    self?.delegate?.vmafCalculatorDidUpdateProgress(
+                        frameCount: frameCount,
+                        fps: fps,
+                        progress: progress,
+                        totalFrames: total
+                    )
                 }
             }
         }
@@ -405,6 +529,16 @@ class VMAFCalculator {
     // Return the last ffmpeg command that was run
     func getLastCommand() -> String {
         return lastCommand
+    }
+    
+    // Return the last captured ffmpeg (stderr) output or error details.
+    func getLastErrorOutput() -> String {
+        return lastErrorOutput
+    }
+    
+    // Return the last termination status if available.
+    func getLastTerminationStatus() -> Int32? {
+        return lastTerminationStatus
     }
 }
 
@@ -416,6 +550,14 @@ extension VMAFCalculator {
         case permissionDenied
         case executableNotFound
         case sandboxViolation
+        case modelNotFound(String)
+        case resolutionMismatch(
+            referenceWidth: Int,
+            referenceHeight: Int,
+            comparisonWidth: Int,
+            comparisonHeight: Int
+        )
+        case missingVideoTrack
         
         var localizedDescription: String {
             switch self {
@@ -429,6 +571,12 @@ extension VMAFCalculator {
                 return "FFmpeg executable not found. Make sure it's included in the app bundle."
             case .sandboxViolation:
                 return "Sandbox violation: The app doesn't have permission to run ffmpeg. Check entitlements and code signing."
+            case .modelNotFound(let name):
+                return "VMAF model '\(name)' not found in app resources."
+            case .resolutionMismatch:
+                return "The resolutions of the Reference and Comparison videos do not match."
+            case .missingVideoTrack:
+                return "No video track found in one of the selected files."
             }
         }
     }

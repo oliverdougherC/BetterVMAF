@@ -14,10 +14,13 @@ Temporary Items
 
 # Xcode
 xcuserdata/
+**/xcuserdata/
 *.xcscmblueprint
 *.xccheckout
 build/
 DerivedData/
+*.xcresult
+*.xcarchive
 *.moved-aside
 *.pbxuser
 !default.pbxuser
@@ -34,11 +37,14 @@ DerivedData/
 *.xcuserstate
 *.xcworkspace
 !default.xcworkspace
+*.app
 *.xcodeproj/*
 !*.xcodeproj/project.pbxproj
 !*.xcodeproj/xcshareddata/
 !*.xcworkspace/contents.xcworkspacedata
 **/xcshareddata/WorkspaceSettings.xcsettings
+VMAF.xcodeproj/project.pbxproj.backup
+VMAF.xcodeproj/project.xcworkspace/xcuserdata/
 
 # Swift Package Manager
 .build/
@@ -87,6 +93,12 @@ fastlane/test_output
 *.bak
 *.swp
 *~
+*.orig
+*.rej
+
+# Local environment
+.env
+.env.*
 
 
 DEVELOPMENT_PLAN.md
