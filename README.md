@@ -5,17 +5,21 @@ A native macOS application for calculating VMAF (Video Multi-Method Assessment F
 ## Features
 
 - Native macOS interface
-- Real-time VMAF calculation
+- Single mode: quick, one-off comparisons with per-frame metrics and graphs
+- Batch mode: queue multiple comparison videos against one reference (validates resolutions up front; shows per-item progress/frames/FPS; preserves completed items between runs)
+- 4K support with automatic model selection (1080p vs 4K) and clear mismatch errors
 - Detailed metrics including:
   - VMAF score
   - Score range (min/max)
   - Harmonic mean
+- Real-time progress with frame counts (when available)
+- Copyable/expandable error details including last ffmpeg command and captured stderr
 - Support for common video containers and codecs
 
 ## System Requirements
 
 - macOS 13.0 or later
-- Self-contained FFmpeg binary with libvmaf support (included in the app bundle)
+- Self-contained FFmpeg 8.0.1 with libvmaf 3.0.0-122 (included in the app bundle)
 
 ## Installation
 
