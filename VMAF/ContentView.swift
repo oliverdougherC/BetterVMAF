@@ -9,6 +9,7 @@ struct ContentView: View {
             VMAFBatchView().tabItem { Label("Batch", systemImage: "tray.full") }
         }
         .frame(minWidth: 760, minHeight: 600)
+        .disclosureGroupStyle(ReviewDisclosureStyle())
     }
 }
 

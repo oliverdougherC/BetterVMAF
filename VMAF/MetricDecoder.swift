@@ -67,7 +67,13 @@ struct XPSNRLog: Sendable {
             }))
         }
         guard frames.count == expectedCount else { throw AnalysisError.invalid("XPSNR coverage differs from the evaluated frame map.") }
-        guard let summary = stderr.split(separator: "\n").last(where: { $0.contains("XPSNR") && $0.contains(" y:") && !$0.contains("XPSNR y:") }) else {
+        // The pinned engine writes a complete native aggregate to its stats file.
+        // av_log writes from other filters can interleave with the multi-part stderr summary.
+        let fileSummary = stats.split(separator: "\n").last { $0.hasPrefix("XPSNR average,") }
+        let diagnosticSummary = stderr.split(separator: "\n").last {
+            $0.contains("XPSNR") && $0.contains(" y:") && $0.contains(" u:") && $0.contains(" v:") && !$0.contains("XPSNR y:")
+        }
+        guard let summary = fileSummary ?? diagnosticSummary else {
             throw AnalysisError.missingMetric("native XPSNR aggregate")
         }
         let average = fields(String(summary))

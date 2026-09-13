@@ -13,7 +13,7 @@ The **2.0 review branch** adds Standard SDR analysis with **VMAF v1.0.16, XPSNR,
 
 VMAF is a model estimate, **not a percentage of retained quality or proof of transparency**. XPSNR retains its own dB scale and native plane aggregation. CAMBI includes source banding and its full-reference difference; VMAF v1 already uses CAMBI internally, so the diagnostic is not another independent vote. Review intervals use supplementary duration-weighted tails, preserve disagreements, and lead to exact video evidence. File-size and container-bitrate savings are separate measurements.
 
-Batch mode compares a source against up to eight encodes, with stable job identities, cancellation and retry. Profiles and coverage must agree before results are compared. Resources are bounded; the current queue retains at most one million measured frame samples, and each analysis accepts at most 500,000 decoded frames. Larger work must be divided into documented matching intervals. The queue is an in-session workflow, not persistent scheduling.
+Only one complete analysis runs at a time across app windows; waiting jobs can be cancelled. Batch mode compares a source against up to eight encodes, with stable job identities, cancellation and retry. Profiles and coverage must agree before results are compared. Resources are bounded; the current queue retains at most one million measured frame samples, and each analysis accepts at most 500,000 decoded frames. Larger work must be divided into documented matching intervals. The queue is an in-session workflow, not persistent scheduling.
 
 ## Supported comparison boundary
 

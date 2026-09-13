@@ -78,6 +78,14 @@ struct AnalysisCoreTests {
         #expect(!graph.contains("99"))
     }
 
+    @Test func xpsnrNativeFileAggregateSurvivesInterleavedDiagnostics() throws {
+        let stats = "n: 1 XPSNR y: inf XPSNR u: inf XPSNR v: inf\n\nXPSNR average, 1 frames  y: inf  u: inf  v: inf  (minimum: inf)\n"
+        let stderr = "[Parsed_xpsnr] XPSNR  y: inf [Parsed_libvmaf] VMAF score:100\n u: inf v: inf\n"
+        let log = try XPSNRLog.parse(stats: stats, stderr: stderr, expectedCount: 1)
+        #expect(log.minimumPlaneAverage == .positiveInfinity)
+        #expect(log.planeAverages.count == 3)
+    }
+
     @Test func identitiesDetectSameSizeChanges() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: url) }

@@ -17,11 +17,11 @@ struct AnalysisProbe {
     let runner: OwnedProcess
 
     func read(_ url: URL) async throws -> ProbedVideo {
-        let metadata = try await runner.run(executable: executable, arguments: ["-v", "error", "-select_streams", "v",
+        let metadata = try await runner.run(executable: executable, arguments: ["-v", "error", "-threads", "2", "-select_streams", "v",
             "-show_streams", "-of", "json", url.path])
         guard metadata.status == 0 else { throw AnalysisError.process(metadata.status, metadata.stderr) }
         let stream = try Self.decodeStream(metadata.stdout)
-        let frameOutput = try await runner.run(executable: executable, arguments: ["-v", "error", "-select_streams", "v:0",
+        let frameOutput = try await runner.run(executable: executable, arguments: ["-v", "error", "-threads", "2", "-select_streams", "v:0",
             "-show_frames", "-show_entries", "frame=best_effort_timestamp,duration,pkt_duration,interlaced_frame",
             "-of", "compact=p=0", url.path])
         guard frameOutput.status == 0 else { throw AnalysisError.process(frameOutput.status, frameOutput.stderr) }

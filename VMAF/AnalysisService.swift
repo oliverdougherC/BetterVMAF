@@ -20,12 +20,57 @@ struct AnalysisEngine: Sendable {
 final class AnalysisService: @unchecked Sendable {
     let runner: OwnedProcess
     let engine: AnalysisEngine
-    init(engine: AnalysisEngine, runner: OwnedProcess = OwnedProcess()) { self.engine = engine; self.runner = runner }
-    func cancel() { runner.cancel() }
+    private let admission: AnalysisAdmission
+    private let jobLock = NSLock()
+    private var ownedJob: Task<AnalysisResult, Error>?
 
-    func analyze(referenceURL: URL, comparisonURL: URL, configuration requestedConfiguration: AnalysisConfiguration,
+    init(engine: AnalysisEngine, runner: OwnedProcess = OwnedProcess(), admission: AnalysisAdmission = .shared) {
+        self.engine = engine; self.runner = runner; self.admission = admission
+    }
+    func cancel() {
+        runner.cancel()
+        jobLock.lock(); let job = ownedJob; jobLock.unlock()
+        job?.cancel()
+    }
+
+    func analyze(referenceURL: URL, comparisonURL: URL, configuration: AnalysisConfiguration,
                  progress: (@Sendable (AnalysisProgress) -> Void)? = nil,
                  diagnostic: (@Sendable (String, String, Int32?) -> Void)? = nil) async throws -> AnalysisResult {
+        try Task.checkCancellation()
+        let job = try startJob {
+            try await self.analyzeAdmitted(referenceURL: referenceURL, comparisonURL: comparisonURL,
+                configuration: configuration, progress: progress, diagnostic: diagnostic)
+        }
+        defer { finishJob() }
+        return try await withTaskCancellationHandler {
+            try await job.value
+        } onCancel: {
+            job.cancel()
+        }
+    }
+
+    private func startJob(_ operation: @escaping @Sendable () async throws -> AnalysisResult) throws -> Task<AnalysisResult, Error> {
+        jobLock.lock()
+        defer { jobLock.unlock() }
+        guard ownedJob == nil else { throw AnalysisError.busy }
+        let job = Task { [admission, runner] in
+            try await admission.withPermit {
+                guard !runner.isCancelled else { throw CancellationError() }
+                return try await operation()
+            }
+        }
+        ownedJob = job
+        if runner.isCancelled { job.cancel() }
+        return job
+    }
+
+    private func finishJob() {
+        jobLock.lock(); ownedJob = nil; jobLock.unlock()
+    }
+
+    private func analyzeAdmitted(referenceURL: URL, comparisonURL: URL, configuration requestedConfiguration: AnalysisConfiguration,
+                 progress: (@Sendable (AnalysisProgress) -> Void)?,
+                 diagnostic: (@Sendable (String, String, Int32?) -> Void)?) async throws -> AnalysisResult {
         // This nonisolated async function runs off the main actor, including hashing and JSON parsing.
         var configuration = AnalysisConfiguration()
         configuration.viewingProfile = requestedConfiguration.viewingProfile

@@ -4,6 +4,7 @@ The production Standard path runs VMAF v1, XPSNR and source-aware CAMBI on the b
 
 ## Boundaries and ownership
 
+- `AnalysisAdmission`: one complete active analysis per app process across all windows/batches, with a FIFO cancellation-aware queue. A queued job allocates no input/engine resources, cancelled waiters never execute, and failure/cancellation releases the permit before another job starts. Explicit service cancellation and enclosing Task cancellation both cancel queued admission.
 - `AnalysisService`: one comparison; captures file identities and configuration, probes inputs, validates correspondence, stages a safe model filename, executes metrics, validates coverage and checks end-of-run hashes.
 - `OwnedProcess`: one child at a time; executable URL and arguments only, no shell/path/library fallback. Dedicated concurrent drains prevent stdout/stderr deadlock. Task cancellation or explicit cancellation sends TERM, escalates to KILL after 750 ms if necessary, awaits/reaps the process, then finishes both drains. A rejected concurrent launch cannot erase another child's ownership. Temporary logs are removed by the service's `defer` on every exit.
 - `AnalysisProbe` / `AnalysisCorrespondence`: decoded video metadata, integer PTS/time bases, per-frame durations and the initial strict comparison policy.
@@ -45,7 +46,7 @@ The pinned native CLI and the Swift service have identical per-frame VMAF/CAMBI 
 
 ## Explicit resource budget
 
-Current supported analysis is capped at **500,000 decoded frames per input**, **256 MB captured metadata stdout**, **512 MB combined metric log files**, and **128 KB diagnostic stderr tail**. Metric log growth is checked every 100 ms during execution and once before parsing; over-budget jobs are terminated/reaped and return an actionable error with no partial result. Stdout overflow similarly stops the child. Worker counts are clamped to 1–8 and the effective value is recorded.
+Only one complete `AnalysisService.analyze` job is admitted at a time across the app process; unrelated windows queue without starting preflight or subprocesses. Current supported analysis is capped at **500,000 decoded frames per input**, **256 MB captured metadata stdout**, **512 MB combined metric log files**, and **128 KB diagnostic stderr tail**. Metric log growth is checked every 100 ms during execution and once before parsing; over-budget jobs are terminated/reaped and return an actionable error with no partial result. Stdout overflow similarly stops the child. Worker counts are clamped to 1–8 and the effective value is recorded.
 
 Signature buffers are 256 bytes per decoded frame, with no extra byte-array copies and released before metric decoding. Metadata/logs and the immutable result are still materialized; the caps bound allocations but are not a measured fixed process-RSS guarantee. The disk watchdog can overshoot its byte threshold by up to one polling interval of engine writes. Large-result storage/retained batch counts are separately bounded by the workflow. Long-duration throughput, peak RSS and energy require their own measured acceptance evidence; short conformance fixtures do not establish those performance claims.
 
@@ -61,6 +62,8 @@ xcodebuild test -project VMAF.xcodeproj -scheme VMAF -destination 'platform=macO
 ```
 
 The 14 analysis tests pass on the development Apple Silicon Mac. They exercise real process launch/drains, ignored-TERM escalation and PID reaping, cancellation before launch, concurrent ownership, byte-boundary progress, bounded output/logs, hashing, frame mapping, explicit color/geometry/multistream refusals, selected/optional/nonfinite metric parsing, bundled Standard identity, safe punctuation paths, same-count shifted content, malformed imported primary outputs and diagnostic reset.
+
+`AnalysisAdmissionTests` adds five checks for whole-job serialization, cancellation while queued (including the real service wrapper and explicit cancel), and permit release after failure/cancellation. These pass in a standalone Swift test executable without launching the app.
 
 [Actual service corpus evidence](evidence/analysis-service-corpus.json) records 58 source/encode cases: 42 accepted and 16 refused, with no policy mismatches. It also records actual lossless remux and VFR checks, same-count shift regression and independent native CLI parity. The [corpus workflow](CORPUS.md) records fixture origins and generation. One instructive identity case is the dark gradient: VMAF 94.909757 while XPSNR is infinite and source/encode CAMBI are equal with full-reference CAMBI zero; identity is not hardcoded to VMAF 100.
 

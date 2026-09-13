@@ -7,17 +7,15 @@ final class VMAFUITests: XCTestCase {
     func testComparisonRequiresInputsAndRevealsViewingProfile() throws {
         let app = XCUIApplication()
         app.launch()
+        app.activate()
         let analyze = app.buttons["analyzeComparison"]
         XCTAssertTrue(analyze.waitForExistence(timeout: 5))
         XCTAssertFalse(analyze.isEnabled)
         XCTAssertTrue(app.buttons["choose-Source · original"].isHittable, app.debugDescription)
         XCTAssertTrue(app.buttons["choose-Encode · comparison"].isHittable, app.debugDescription)
-        let assumptions = app.disclosureTriangles["Viewing assumptions"]
+        let assumptions = app.buttons["Viewing assumptions"]
         XCTAssertTrue(assumptions.exists)
-        // macOS15 includes the noninteractive label in this element's bounds.
-        // Activate the actual disclosure arrow at the leading edge.
-        assumptions.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5))
-            .withOffset(CGVector(dx: 6, dy: 0)).click()
+        assumptions.click()
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "viewingProfilePicker").firstMatch.waitForExistence(timeout: 2), app.debugDescription)
         XCTAssertFalse(analyze.isEnabled)
     }
@@ -26,6 +24,7 @@ final class VMAFUITests: XCTestCase {
     func testBatchMakesQueueLimitsAndRequiredSourceVisible() throws {
         let app = XCUIApplication()
         app.launch()
+        app.activate()
         let batch = app.descendants(matching: .any).matching(identifier: "tray.full").firstMatch
         XCTAssertTrue(batch.waitForExistence(timeout: 5))
         batch.click()
