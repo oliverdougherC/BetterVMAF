@@ -1,0 +1,139 @@
+{
+  "libvmafRevision": "f85a853692a8c730d0270cd733c8bb30b5b93b7c",
+  "passed": 22,
+  "failed": 0,
+  "tests": [
+    {
+      "name": "libvmaf:test_picture",
+      "result": "OK",
+      "duration": 0.04661679267883301,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_feature_collector",
+      "result": "OK",
+      "duration": 0.04433465003967285,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_thread_pool",
+      "result": "OK",
+      "duration": 0.04049396514892578,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_model",
+      "result": "OK",
+      "duration": 0.037380218505859375,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_predict",
+      "result": "OK",
+      "duration": 0.03258705139160156,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_feature_extractor",
+      "result": "OK",
+      "duration": 0.029278993606567383,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_dict",
+      "result": "OK",
+      "duration": 0.02521991729736328,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_cpu",
+      "result": "OK",
+      "duration": 0.021924972534179688,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_ref",
+      "result": "OK",
+      "duration": 0.01835775375366211,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_feature",
+      "result": "OK",
+      "duration": 0.015175819396972656,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_ciede",
+      "result": "OK",
+      "duration": 0.012648820877075195,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_cambi",
+      "result": "OK",
+      "duration": 0.009818077087402344,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_luminance_tools",
+      "result": "OK",
+      "duration": 0.0354008674621582,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_cli_parse",
+      "result": "OK",
+      "duration": 0.029200077056884766,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_psnr",
+      "result": "OK",
+      "duration": 0.026124000549316406,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_propagate_metadata",
+      "result": "OK",
+      "duration": 0.018633365631103516,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_adm_csf",
+      "result": "OK",
+      "duration": 0.015759944915771484,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_barten_csf",
+      "result": "OK",
+      "duration": 0.012295007705688477,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_motion_blend",
+      "result": "OK",
+      "duration": 0.00859379768371582,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_motion_neon",
+      "result": "OK",
+      "duration": 0.00847315788269043,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_pic_preallocation",
+      "result": "OK",
+      "duration": 1.2229371070861816,
+      "returncode": 0
+    },
+    {
+      "name": "libvmaf:test_framesync",
+      "result": "OK",
+      "duration": 5.029597997665405,
+      "returncode": 0
+    }
+  ]
+}
