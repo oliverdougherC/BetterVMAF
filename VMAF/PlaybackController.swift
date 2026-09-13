@@ -29,11 +29,13 @@ final class PlaybackController: ObservableObject {
             error = "Playback requires a result with verified source identities and frame mapping. Analyze this pair again."
             return
         }
-        frames = analysis.framePairs
         do {
             // Prevent a changed on-disk file being shown as evidence for an older result.
             let identityWorker = Task.detached(priority: .userInitiated) {
-                (try AnalysisFileIdentity.capture(analysis.reference.url), try AnalysisFileIdentity.capture(analysis.comparison.url))
+                let source = try AnalysisFileIdentity.capture(analysis.reference.url)
+                let encode = try AnalysisFileIdentity.capture(analysis.comparison.url)
+                try Task.checkCancellation()
+                return (source, encode, analysis.framePairs)
             }
             let identities = try await withTaskCancellationHandler { try await identityWorker.value } onCancel: { identityWorker.cancel() }
             guard identities.0.sha256 == analysis.reference.sha256,
@@ -50,6 +52,7 @@ final class PlaybackController: ObservableObject {
                 throw AnalysisError.invalid("macOS cannot play one of these containers or codecs. Analysis is retained. For visual review, create a supported lossless intermediate and analyze that exact pair; this viewer does not silently substitute media.")
             }
             guard generation == loadID, !Task.isCancelled else { return }
+            frames = identities.2
             referencePlayer.replaceCurrentItem(with: AVPlayerItem(asset: reference))
             comparisonPlayer.replaceCurrentItem(with: AVPlayerItem(asset: comparison))
             referencePlayer.isMuted = true
