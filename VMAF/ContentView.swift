@@ -90,6 +90,7 @@ struct VideoInputCard: View {
             Button(url == nil ? "Choose video…" : "Change video…") {
                 VideoSelection.choose { if let first = $0.first { select(first) } }
             }.disabled(disabled)
+                .accessibilityIdentifier("choose-\(title)")
         }
         .padding(16)
         .frame(maxWidth: .infinity, minHeight: 110, alignment: .topLeading)

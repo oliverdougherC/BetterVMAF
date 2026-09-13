@@ -29,6 +29,9 @@ struct VMAFBatchView: View {
                     Button("Clear") { selectedID = nil; session.clear() }.disabled(session.isBusy || session.items.isEmpty)
                 }
                 Text("Sequential queue · up to 8 candidates and 1,000,000 retained frame samples.").font(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("batchResourceLimits")
+                    .accessibilityLabel("Queue limits")
+                    .accessibilityValue("Up to 8 candidates and 1,000,000 retained frame samples")
                 if let message = session.queueMessage { Text(message).foregroundStyle(.orange) }
                 if session.items.isEmpty { ContentUnavailableView("Add your encodes", systemImage: "tray", description: Text("Choose videos or drop them here. Each will be compared against the same source.")) }
                 ForEach(session.items) { item in

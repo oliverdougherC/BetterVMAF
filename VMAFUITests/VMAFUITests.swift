@@ -10,8 +10,8 @@ final class VMAFUITests: XCTestCase {
         let analyze = app.buttons["analyzeComparison"]
         XCTAssertTrue(analyze.waitForExistence(timeout: 5))
         XCTAssertFalse(analyze.isEnabled)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Source · original")).firstMatch.exists)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Encode · comparison")).firstMatch.exists)
+        XCTAssertTrue(app.buttons["choose-Source · original"].isHittable, app.debugDescription)
+        XCTAssertTrue(app.buttons["choose-Encode · comparison"].isHittable, app.debugDescription)
         let assumptions = app.disclosureTriangles["Viewing assumptions"]
         XCTAssertTrue(assumptions.exists)
         assumptions.click()
@@ -29,7 +29,9 @@ final class VMAFUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Add encodes…"].waitForExistence(timeout: 2))
         XCTAssertFalse(app.buttons["Start pending"].isEnabled)
         XCTAssertFalse(app.buttons["Clear"].isEnabled)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "1,000,000 retained frame samples")).firstMatch.exists)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Shared source")).firstMatch.exists)
+        let limits = app.descendants(matching: .any).matching(identifier: "batchResourceLimits").firstMatch
+        XCTAssertTrue(limits.exists, app.debugDescription)
+        XCTAssertTrue((limits.value as? String)?.contains("1,000,000 retained frame samples") == true, app.debugDescription)
+        XCTAssertTrue(app.buttons["choose-Shared source"].isHittable, app.debugDescription)
     }
 }

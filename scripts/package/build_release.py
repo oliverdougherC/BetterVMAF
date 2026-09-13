@@ -63,7 +63,7 @@ def main():
             run(['codesign', '--force', '--sign', '-', engine / helper])
         run(['codesign', '--force', '--sign', '-', '--entitlements', ROOT / 'VMAF/VMAF.entitlements', app])
         run(['codesign', '--verify', '--deep', '--strict', app])
-        entitlements = plistlib.loads(subprocess.check_output(['codesign', '-d', '--entitlements', '-', app], env=BUILD_ENV, stderr=subprocess.DEVNULL))
+        entitlements = plistlib.loads(subprocess.check_output(['codesign', '-d', '--entitlements', '-', '--xml', app], env=BUILD_ENV, stderr=subprocess.DEVNULL))
         assert entitlements.get('com.apple.security.app-sandbox') is True
         assert entitlements.get('com.apple.security.files.user-selected.read-write') is True
         run([sys.executable, ROOT / 'scripts/engine/verify.py', '--engine', engine, '--report', work / 'engine-after-sign.json'], stdout=subprocess.DEVNULL)
