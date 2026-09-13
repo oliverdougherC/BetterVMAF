@@ -32,4 +32,11 @@ struct TimelineTests {
         #expect(TimelineData.domain([TimelinePoint(id: 0, time: 0, value: -42)]).contains(-42))
         #expect(TimelineData.envelope(one, range: 2...3, buckets: 100).isEmpty)
     }
+
+    @Test func reductionRetainsFiniteIntervalIdentity() {
+        let points = (0..<1000).map { TimelinePoint(id: $0, time: Double($0), value: Double($0 % 101), segment: $0 < 500 ? 0 : 1) }
+        let reduced = TimelineData.envelope(points, range: 0...999, buckets: 10)
+        #expect(reduced.allSatisfy { $0.segment == ($0.id < 500 ? 0 : 1) })
+        #expect(Set(reduced.map(\.segment)) == [0, 1])
+    }
 }

@@ -14,6 +14,8 @@ final class OwnedProcess: @unchecked Sendable {
     private var cancelled = false
     private let terminationGrace: TimeInterval
 
+    var isCancelled: Bool { lock.lock(); defer { lock.unlock() }; return cancelled }
+
     init(terminationGrace: TimeInterval = 0.75) { self.terminationGrace = terminationGrace }
 
     func cancel() {
@@ -87,7 +89,7 @@ final class OwnedProcess: @unchecked Sendable {
                     let alreadyOverflowed = buffer.overflow
                     buffer.append(data)
                     if buffer.overflow && !alreadyOverflowed { self.cancel() }
-                    callback?(data)
+                    if !self.isCancelled { callback?(data) }
                 }
             }
         }

@@ -2,6 +2,16 @@ import Testing
 @testable import VMAF
 
 struct ReviewSummaryTests {
+    @Test func cancelledSummaryDoesNotPublishPartialStatistics() async {
+        let summary = await Task.detached {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return ReviewSummary.summarize([ReviewObservation(frame: 0, time: 0, duration: 1, value: 95)],
+                id: "vmaf", name: "VMAF", unit: "points", lowerIsBetter: false)
+        }.value
+        #expect(summary.0.validCount == 0)
+        #expect(summary.0.durationWeightedMean == .unavailable)
+        #expect(summary.1.isEmpty)
+    }
     @Test func isolatedAndSustainedDamageStaySeparate() {
         let points = (0..<600).map { i in
             ReviewObservation(frame: i, time: Double(i) / 60, duration: 1.0 / 60,

@@ -12,11 +12,11 @@ struct VMAFApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .frame(minWidth: 600, minHeight: 500)
+                .frame(minWidth: 860, minHeight: 700)
         }
         .windowStyle(.automatic)
         .windowResizability(.contentMinSize)
-        .defaultSize(width: 600, height: 500)
+        .defaultSize(width: 1000, height: 800)
         .defaultPosition(.center)
     }
 } 

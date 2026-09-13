@@ -1,438 +1,96 @@
-//
-//  VMAFBatchView.swift
-//  VMAF
-//
-//  Batch mode UI for running multiple comparisons against a single reference.
-//
-
 import SwiftUI
-import UniformTypeIdentifiers
-import AVFoundation
 
 struct VMAFBatchView: View {
-    @State private var referenceVideo: URL?
-    @State private var comparisons: [BatchItem] = []
-    @State private var isRunning = false
-    @State private var validationMessage: String?
-    @State private var batchError: String?
-    @State private var showCommandSheet = false
-    @State private var ffmpegCommand: String = ""
-    @State private var currentIndex: Int?
-    
-    private let calculator = VMAFCalculator()
-    
+    @StateObject private var session = BatchComparisonSession()
+    @State private var selectedID: UUID?
     var body: some View {
-        VStack(spacing: 16) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Batch Mode")
-                        .font(.title)
-                        .padding(.top)
-                    
-                    GroupBox("Reference Video") {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Reference Video (Original)")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                if let url = referenceVideo {
-                                    Text(url.lastPathComponent)
-                                        .font(.system(.body, design: .monospaced))
-                                        .lineLimit(1)
-                                } else {
-                                    Text("Not Selected")
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            Spacer()
-                            Button(action: selectReference) {
-                                Label("Select", systemImage: "doc.badge.plus")
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(isRunning)
-                        }
+        ScrollViewReader { proxy in
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("One source, several encodes").font(.largeTitle.bold())
+                Text("Analyze sequentially, then inspect each candidate. Size and named measurements stay separate.").foregroundStyle(.secondary)
+                VideoInputCard(title: "Shared source · original", url: session.source, disabled: session.isBusy) { url in
+                    selectedID = nil; session.selectSource(url)
+                }
+                DisclosureGroup("Viewing assumptions for this queue") {
+                    Picker("Viewing profile", selection: Binding(get: { session.configuration.viewingProfile }, set: { selectedID = nil; session.selectProfile($0) })) {
+                        ForEach(AnalysisConfiguration.ViewingProfile.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }.disabled(session.isBusy)
+                }
+                HStack {
+                    Button("Add encodes…", systemImage: "plus") { VideoSelection.choose(multiple: true) { session.add($0) } }.disabled(session.isBusy)
+                    Button("Start pending", action: session.start).buttonStyle(.borderedProminent)
+                        .disabled(session.isBusy || session.source == nil || !session.items.contains(where: { $0.state == .pending }))
+                    if session.isBusy {
+                        ProgressView().controlSize(.small)
+                        Button(session.state == .cancelling ? "Stopping…" : "Stop queue", action: session.cancel).disabled(session.state == .cancelling)
                     }
-                    
-                    GroupBox("Comparison Videos") {
-                        VStack(alignment: .leading, spacing: 8) {
-                            if comparisons.isEmpty {
-                                Text("No comparison videos selected.")
-                                    .foregroundColor(.secondary)
-                            } else {
-                                ForEach(comparisons) { item in
-                                    BatchItemRow(
-                                        item: item,
-                                        isCurrent: currentIndex.map { comparisons[$0].id == item.id } ?? false,
-                                        removeAction: { removeComparison(item) },
-                                        canRemove: !isRunning
-                                    )
-                                }
-                            }
-                            
-                            HStack {
-                                Button(action: addComparisons) {
-                                    Label("Add Videos", systemImage: "plus")
-                                }
-                                .buttonStyle(.bordered)
-                                .disabled(isRunning)
-                                
-                                if !comparisons.isEmpty && !isRunning {
-                                    Button(action: { comparisons.removeAll() }) {
-                                        Label("Clear", systemImage: "trash")
-                                    }
-                                    .buttonStyle(.bordered)
-                                }
-                            }
-                        }
-                    }
-                    
-                    if let validation = validationMessage {
-                        Text(validation)
-                            .foregroundColor(.orange)
-                            .font(.callout)
-                    }
-                    
-                    if let batchError = batchError {
-                        Text(batchError)
-                            .foregroundColor(.red)
-                            .font(.callout)
-                    }
-                    
-                    HStack {
-                        Button(action: startBatch) {
-                            if isRunning {
-                                ProgressView()
-                            } else {
-                                Label("Start Batch", systemImage: "play.fill")
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(referenceVideo == nil || comparisons.isEmpty || isRunning)
-                        
-                        if isRunning {
-                            Button(action: cancelBatch) {
-                                Label("Cancel", systemImage: "stop.fill")
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                        
-                        Spacer()
-                        
-                        if isRunning {
-                            Button("Show FFmpeg Command") {
-                                ffmpegCommand = calculator.getLastCommand()
-                                showCommandSheet = true
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                    }
-                }
-                .padding()
-            }
-        }
-        .sheet(isPresented: $showCommandSheet) {
-            VStack(spacing: 16) {
-                Text("FFmpeg Command")
-                    .font(.headline)
-                ScrollView {
-                    Text(ffmpegCommand)
-                        .font(.system(.body, design: .monospaced))
-                        .padding()
-                        .textSelection(.enabled)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(nsColor: .textBackgroundColor))
-                .cornerRadius(8)
-                
-                Button("Close") {
-                    showCommandSheet = false
-                }
-                .buttonStyle(.borderedProminent)
-            }
-            .padding()
-            .frame(width: 600, height: 300)
-        }
-    }
-    
-    private func selectReference() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowedContentTypes = [.movie]
-        
-        if panel.runModal() == .OK, let url = panel.url {
-            referenceVideo = url
-        }
-    }
-    
-    private func addComparisons() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowedContentTypes = [.movie]
-        
-        if panel.runModal() == .OK {
-            let newItems = panel.urls.map { BatchItem(url: $0) }
-            comparisons.append(contentsOf: newItems)
-        }
-    }
-    
-    private func removeComparison(_ item: BatchItem) {
-        comparisons.removeAll { $0.id == item.id }
-    }
-    
-    private func startBatch() {
-        guard let reference = referenceVideo else { return }
-        validationMessage = nil
-        batchError = nil
-        
-        Task {
-            // Determine which items need processing (skip already completed).
-            let pendingIndices = await MainActor.run { comparisons.indices.filter { comparisons[$0].status != .completed } }
-            if pendingIndices.isEmpty {
-                await MainActor.run {
-                    validationMessage = "No pending videos to process."
-                }
-                return
-            }
-            
-            // Validate pending items
-            let pendingURLs = await MainActor.run { pendingIndices.map { comparisons[$0].url } }
-            let validation = await validate(reference: reference, comparisons: pendingURLs)
-            if !validation.isEmpty {
-                await MainActor.run {
-                    validationMessage = validation.joined(separator: "\n")
-                }
-                return
-            }
-            
-            await MainActor.run {
-                isRunning = true
-                currentIndex = nil
-                // Reset only pending items
-                comparisons = comparisons.enumerated().map { idx, item in
-                    guard pendingIndices.contains(idx) else { return item }
-                    var mutable = item
-                    mutable.status = .pending
-                    mutable.progressFrames = 0
-                    mutable.totalFrames = nil
-                    mutable.percent = 0
-                    mutable.result = nil
-                    mutable.error = nil
-                    return mutable
-                }
-                calculator.delegate = self
-            }
-            
-            for idx in pendingIndices {
-                if await MainActor.run(body: { !isRunning }) { break }
-                
-                await MainActor.run {
-                    currentIndex = idx
-                    comparisons[idx].status = .running
-                }
-                
-                let cmpURL = await MainActor.run { comparisons[idx].url }
-                
-                do {
-                    let result = try await calculator.calculateVMAF(referenceVideo: reference, comparisonVideo: cmpURL)
-                    await MainActor.run {
-                        comparisons[idx].status = .completed
-                        comparisons[idx].result = result
-                        comparisons[idx].percent = 100
-                        comparisons[idx].progressFrames = result.frameCount
-                        comparisons[idx].totalFrames = result.frameCount
-                    }
-                } catch {
-                    await MainActor.run {
-                        comparisons[idx].status = .failed
-                        comparisons[idx].error = error.localizedDescription
-                        batchError = "One or more comparisons failed. Check the list for details."
-                    }
-                }
-            }
-            
-            await MainActor.run {
-                isRunning = false
-                currentIndex = nil
-            }
-        }
-    }
-    
-    private func cancelBatch() {
-        // Simple cancellation by toggling state; current ffmpeg run will finish but loop stops.
-        isRunning = false
-        currentIndex = nil
-    }
-    
-    private func validate(reference: URL, comparisons: [URL]) async -> [String] {
-        var issues: [String] = []
-        guard let referenceProps = try? await videoProps(for: reference) else {
-            issues.append("Reference video is unreadable or has no video track.")
-            return issues
-        }
-        
-        for url in comparisons {
-            guard let props = try? await videoProps(for: url) else {
-                issues.append("\(url.lastPathComponent): unreadable or no video track.")
-                continue
-            }
-            if props.width != referenceProps.width || props.height != referenceProps.height {
-                issues.append("\(url.lastPathComponent): resolution \(props.width)x\(props.height) does not match reference \(referenceProps.width)x\(referenceProps.height).")
-            }
-        }
-        
-        return issues
-    }
-    
-    private func videoProps(for url: URL) async throws -> (width: Int, height: Int, fps: Double) {
-        let asset = AVURLAsset(url: url)
-        let tracks = try await asset.loadTracks(withMediaType: .video)
-        guard let track = tracks.first else {
-            throw NSError(domain: "BatchValidation", code: 1, userInfo: nil)
-        }
-        let naturalSize = try await track.load(.naturalSize)
-        let transform = try await track.load(.preferredTransform)
-        let transformedSize = naturalSize.applying(transform)
-        let width = Int(round(abs(transformedSize.width)))
-        let height = Int(round(abs(transformedSize.height)))
-        let fps = Double(try await track.load(.nominalFrameRate))
-        return (width, height, fps)
-    }
-}
-
-// MARK: - Delegate
-extension VMAFBatchView: VMAFCalculator.VMAFCalculatorDelegate {
-    func vmafCalculatorDidUpdateProgress(frameCount: Int, fps: Double, progress: Double, totalFrames: Int) {
-        guard let idx = currentIndex else { return }
-        if idx < comparisons.count {
-            comparisons[idx].progressFrames = frameCount
-            comparisons[idx].totalFrames = totalFrames > 0 ? totalFrames : comparisons[idx].totalFrames
-            if let total = comparisons[idx].totalFrames, total > 0 {
-                comparisons[idx].percent = min(100, max(0, Double(frameCount) / Double(total) * 100))
-            } else {
-                comparisons[idx].percent = progress
-            }
-            comparisons[idx].fps = fps
-        }
-    }
-}
-
-// MARK: - Batch Item Row
-private struct BatchItemRow: View {
-    let item: BatchItem
-    let isCurrent: Bool
-    let removeAction: () -> Void
-    let canRemove: Bool
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(item.url.lastPathComponent)
-                        .font(.system(.body, design: .monospaced))
-                        .lineLimit(1)
-                    Text(statusLabel)
-                        .font(.caption)
-                        .foregroundColor(statusColor)
-                }
-                Spacer()
-                if canRemove {
-                    Button(action: removeAction) {
-                        Image(systemName: "trash")
-                    }
-                    .buttonStyle(.borderless)
-                }
-            }
-            
-            if isCurrent || item.status == .running || item.status == .completed || item.status == .failed {
-                ProgressView(value: progressValue)
-                    .progressViewStyle(.linear)
-                HStack(spacing: 12) {
-                    Text(progressText)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
                     Spacer()
-                    if item.fps > 0 {
-                        Text("\(String(format: "%.1f", item.fps)) FPS")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                    Button("Clear") { selectedID = nil; session.clear() }.disabled(session.isBusy || session.items.isEmpty)
                 }
-            }
-            
-            if let result = item.result, item.status == .completed {
-                Text(String(format: "VMAF: %.2f  (min: %.2f  max: %.2f)", result.score, result.minScore, result.maxScore))
-                    .font(.caption)
-            }
-            
-            if let error = item.error, item.status == .failed {
-                Text(error)
-                    .font(.caption)
-                    .foregroundColor(.red)
-            }
+                Text("Sequential queue · up to 8 candidates and 1,000,000 retained frame samples.").font(.caption).foregroundStyle(.secondary)
+                if let message = session.queueMessage { Text(message).foregroundStyle(.orange) }
+                if session.items.isEmpty { ContentUnavailableView("Add your encodes", systemImage: "tray", description: Text("Choose videos or drop them here. Each will be compared against the same source.")) }
+                ForEach(session.items) { item in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(item.url.lastPathComponent).font(.headline).lineLimit(1).help(item.url.path)
+                            Spacer()
+                            Text(item.state.rawValue.capitalized).font(.caption).foregroundStyle(.secondary)
+                            if item.result != nil {
+                                Button("Inspect") { selectedID = item.id }
+                            }
+                            if session.isBusy && (item.state == .running || item.state == .pending) {
+                                Button("Cancel job") { session.cancelItem(item.id) }
+                            } else if !session.isBusy {
+                                if item.state == .failed || item.state == .cancelled || item.state == .completed {
+                                    Button("Retry") { if selectedID == item.id { selectedID = nil }; session.retry(item.id) }
+                                }
+                                Button { if selectedID == item.id { selectedID = nil }; session.remove(item.id) } label: { Image(systemName: "trash") }.accessibilityLabel("Remove \(item.url.lastPathComponent)")
+                            }
+                        }
+                        if item.state == .running, let progress = item.progress { AnalysisProgressView(progress: progress) }
+                        if let analysis = item.result?.analysis {
+                            HStack {
+                                Text(ByteCountFormatter.string(fromByteCount: analysis.comparison.byteCount, countStyle: .file))
+                                ForEach(analysis.definitions.prefix(4), id: \.id) { definition in
+                                    if let value = ComparisonTradeoffs.nativeValue(definition.id, in: analysis) { Text("\(definition.name): \(ExportManager.value(value)) \(definition.unit)") }
+                                }
+                            }.font(.caption).monospacedDigit()
+                            Text(tradeoffLabel(item)).font(.caption).foregroundStyle(.secondary)
+                        }
+                        if let error = item.error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
+                    }.padding(14).background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 9))
+                }
+                Text("Non-dominated means no compatible completed candidate is both smaller and at least as strong in every available named aggregate. It is a review aid, not a universal winner.").font(.caption).foregroundStyle(.secondary)
+                if let id = selectedID, let result = session.items.first(where: { $0.id == id })?.result {
+                    Divider()
+                    ComparisonResultView(result: result, onInspect: {
+                        withAnimation { proxy.scrollTo("viewer-\(result.analysis?.runID.uuidString ?? "legacy")", anchor: .top) }
+                    }).id(id)
+                }
+            }.padding(24)
         }
-        .padding(8)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(6)
+        .dropDestination(for: URL.self) { urls, _ in
+            guard !session.isBusy else { return false }
+            session.add(urls.filter(\.isFileURL)); return !urls.isEmpty
+        }
+        .onChange(of: selectedID) { _, id in
+            if let id { withAnimation { proxy.scrollTo(id, anchor: .top) } }
+        }
+        }
+        .onDisappear { session.cancel() }
     }
-    
-    private var statusLabel: String {
-        switch item.status {
-        case .pending: return "Pending"
-        case .running: return "Running"
-        case .completed: return "Completed"
-        case .failed: return "Failed"
+    private func tradeoffLabel(_ item: BatchComparison) -> String {
+        guard let key = item.compatibilityKey, let analysis = item.result?.analysis else { return "Comparability unavailable" }
+        let peers = session.items.filter { $0.id != item.id && $0.state == .completed && $0.compatibilityKey == key }
+        guard !peers.isEmpty else { return "No other completed candidate with identical model, preprocessing and coverage yet." }
+        if peers.contains(where: { $0.result?.analysis.map { ComparisonTradeoffs.dominates($0, analysis) } ?? false }) {
+            return "A compatible candidate is no larger and is at least as strong on every measured aggregate."
         }
-    }
-    
-    private var statusColor: Color {
-        switch item.status {
-        case .pending: return .secondary
-        case .running: return .blue
-        case .completed: return .green
-        case .failed: return .red
+        if ComparisonTradeoffs.rankingDefinitions(analysis).contains(where: { ComparisonTradeoffs.nativeValue($0.id, in: analysis)?.doubleValue == nil }) {
+            return "Incomplete metric profile; tradeoff ranking unavailable."
         }
-    }
-    
-    private var progressValue: Double {
-        if item.percent > 0 {
-            return item.percent / 100.0
-        }
-        if let total = item.totalFrames, total > 0 {
-            return Double(item.progressFrames) / Double(total)
-        }
-        return 0
-    }
-    
-    private var progressText: String {
-        if let total = item.totalFrames, total > 0 {
-            let percent = min(100, max(0, Double(item.progressFrames) / Double(total) * 100))
-            return "Frame \(item.progressFrames) of \(total) (\(String(format: "%.1f%%", percent)))"
-        }
-        return "Frame \(item.progressFrames)"
+        return "Non-dominated among \(peers.count + 1) compatible candidates · inspect the tradeoff."
     }
 }
-
-// MARK: - Models
-struct BatchItem: Identifiable {
-    enum Status {
-        case pending
-        case running
-        case completed
-        case failed
-    }
-    
-    let id = UUID()
-    let url: URL
-    var status: Status = .pending
-    var progressFrames: Int = 0
-    var totalFrames: Int? = nil
-    var percent: Double = 0
-    var fps: Double = 0
-    var result: VMAFCalculator.VMAFResult? = nil
-    var error: String? = nil
-}
-

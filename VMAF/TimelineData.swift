@@ -4,6 +4,11 @@ struct TimelinePoint: Identifiable, Sendable, Equatable {
     let id: Int
     let time: Double
     let value: Double
+    let segment: Int
+
+    init(id: Int, time: Double, value: Double, segment: Int = 0) {
+        self.id = id; self.time = time; self.value = value; self.segment = segment
+    }
 }
 
 /// Sorted immutable samples. Only visualization is reduced; callers retain raw data.
@@ -47,6 +52,7 @@ enum TimelineData {
             }
         }
         for i in start..<end {
+            if i % 4096 == 0, Task.isCancelled { return [] }
             let bucket = min(buckets - 1, Int((points[i].time - range.lowerBound) / span * Double(buckets)))
             if bucket != bucketID {
                 if bucketID >= 0 { appendExtrema() }
@@ -66,7 +72,8 @@ enum TimelineData {
     static func domain(_ points: [TimelinePoint]) -> ClosedRange<Double> {
         var minimum = Double.infinity
         var maximum = -Double.infinity
-        for point in points where point.value.isFinite {
+        for (index, point) in points.enumerated() where point.value.isFinite {
+            if index % 4096 == 0, Task.isCancelled { return 0...1 }
             minimum = min(minimum, point.value)
             maximum = max(maximum, point.value)
         }

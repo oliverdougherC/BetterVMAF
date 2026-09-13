@@ -64,6 +64,7 @@ final class VMAFCalculator: @unchecked Sendable {
     private let lock = NSLock()
     private var activeService: AnalysisService?
     private var activeRun: UUID?
+    private var cancellationRequested = false
     private var lastCommand = ""
     private var lastErrorOutput = ""
     private var lastTerminationStatus: Int32?
@@ -72,7 +73,7 @@ final class VMAFCalculator: @unchecked Sendable {
     init(engine: AnalysisEngine? = nil) { injectedEngine = engine }
 
     func cancel() {
-        lock.lock(); let service = activeService; lock.unlock()
+        lock.lock(); cancellationRequested = true; let service = activeService; lock.unlock()
         service?.cancel()
     }
     func getEstimatedTotalFrames() -> Int? {
@@ -85,26 +86,29 @@ final class VMAFCalculator: @unchecked Sendable {
     private func begin() throws -> UUID {
         lock.lock(); defer { lock.unlock() }
         guard activeRun == nil else { throw AnalysisError.busy }
-        lastCommand = ""; lastErrorOutput = ""; lastTerminationStatus = nil; estimatedTotalFrames = 0
+        lastCommand = ""; lastErrorOutput = ""; lastTerminationStatus = nil; estimatedTotalFrames = 0; cancellationRequested = false
         let id = UUID(); activeRun = id; return id
     }
     private func finish(_ id: UUID) {
         lock.lock(); defer { lock.unlock() }
         if activeRun == id { activeService = nil; activeRun = nil }
     }
-    private func install(_ service: AnalysisService) { lock.lock(); activeService = service; lock.unlock() }
+    private func install(_ service: AnalysisService) {
+        lock.lock(); activeService = service; let cancel = cancellationRequested; lock.unlock()
+        if cancel { service.cancel() }
+    }
     private func diagnostic(_ command: String, _ stderr: String, _ status: Int32?) {
         lock.lock(); defer { lock.unlock() }; lastCommand = command; lastErrorOutput = stderr; lastTerminationStatus = status
     }
     private func progress(_ update: AnalysisProgress, runID: UUID) {
         lock.lock()
-        guard activeRun == runID else { lock.unlock(); return }
+        guard activeRun == runID, !cancellationRequested else { lock.unlock(); return }
         estimatedTotalFrames = update.totalFrames ?? 0
         lock.unlock()
         onProgress?(update)
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.lock.lock(); let current = self.activeRun == runID; self.lock.unlock()
+            self.lock.lock(); let current = self.activeRun == runID && !self.cancellationRequested; self.lock.unlock()
             guard current else { return }
             self.delegate?.vmafCalculatorDidUpdateProgress(frameCount: update.frameCount, fps: update.processingFPS,
                 progress: (update.fraction ?? 0) * 100, totalFrames: update.totalFrames ?? 0)

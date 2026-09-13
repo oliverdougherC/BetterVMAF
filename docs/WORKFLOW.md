@@ -1,0 +1,33 @@
+# Comparison, playback, batch and exports
+
+The default workflow is source → encode → Analyze → review named measurements and selected moments. Setup collapses when a result arrives. Selecting a concern seeks both videos to the exact recorded pair, enables an interval loop and scrolls the viewer into view. The metric selector displays one native unit/scale at a time. Six merged concerns are shown initially; more can be disclosed. Source/encode CAMBI context stays visible and is not presented as a second independent vote alongside VMAF v1.
+
+## Ownership and recovery
+
+`ComparisonSession` owns one task and immutable input/configuration snapshot per run. It locks inputs before preflight, clears old results before a rerun and rejects stale progress/completions. Cancel remains in the cancelling state until the owned engine call returns after teardown. Source, encode or viewing-profile changes invalidate the current result. Closing/hiding the view cancels its task. Progress is throttled to at most ten displayed updates per second; preflight stays indeterminate.
+
+`BatchComparisonSession` owns stable row IDs, an immutable source/configuration snapshot and one child analysis at a time. Cancel job can skip a pending candidate or cancel the active child, then continue the queue. Stop queue cancels the active child and leaves pending work available. Failed/cancelled/completed rows can be explicitly retried. Source/profile changes reset every row and its identity. The first accepted source SHA-256 is pinned for the queue; a later result from changed source bytes is rejected and stops the queue without overwriting earlier results. Conflicting edits stay locked through cancellation and process teardown.
+
+The queue is explicitly limited to eight candidates and 1,000,000 retained frame samples. The engine's per-analysis ceiling is 500,000 frames per input. After the first validated result establishes the immutable source's frame count, the queue pauses before launching a candidate that would exceed its retained-result budget. Publication also checks the actual completed count against all retained results, so an underestimated count cannot exceed the cap. Export and remove completed candidates before continuing. These are deterministic resource ceilings, not measured memory guarantees. Queue recovery is in-session; results are not a persistent overnight job database.
+
+Candidate comparisons require the same source hash, schema, model, engine, configuration, preprocessing, definitions and exact analyzed coverage. Non-dominated labels compare bytes and each native metric aggregate without inventing a quality-efficiency score. VMAF uses upstream mean; XPSNR uses native distortion-domain plane averages, retaining infinity; CAMBI uses its source-aware introduced diagnostic. Raw source/encode banding remain context and do not receive additional votes. Incomplete profiles are not ranked.
+
+## Playback contract
+
+The viewer verifies current file hashes against the stored identities before playback. Unsupported native containers/codecs produce an explicit error and preserve the analysis. The deliberate fallback is to make a supported lossless intermediate and analyze that exact pair; there is no silent preview transcode.
+
+Seek and start times are constructed from original integer PTS and rational time bases using `CMTime`, not rounded decimal/nanosecond timestamps. This matters at 24 fps: rounding just below a frame boundary can display the previous frame. Both players use one host-clock start and a shared transport. Frame stepping uses the analyzed pair array. A periodic drift check pauses/resynchronizes a stalled decoder. Exact seeking and synchronized presentation are exercised in a native AVFoundation test using generated rational-24-fps media with a VFR gap, checking `AVPlayerItemVideoOutput` display timestamps from both players.
+
+Side-by-side and wipe share zoom/pan; 1:1 mode maps one source pixel to one backing pixel on the current main screen. Drag pans both views, space toggles playback, and arrows step matched frames. The viewer is muted. AVFoundation manages native SDR display color, separately from the recorded analysis conversion; this is not a calibrated display simulation or spatial difference map. Current comparison policy rejects rotated/HDR inputs before results. Long/GOP-heavy codec and multi-display playback still need broader measured acceptance; a short exact-PTS test is not evidence for every codec.
+
+## Export contract
+
+The default export is a one-page vector PDF summary. Detailed PDF is explicitly capped at 500 frame rows. CSV/JSON are the full-frame formats. Select options and destination before serialization starts. CSV streams through a bounded 64 KiB buffer, JSON checks cancellation while encoding samples, and PDF draws with CoreGraphics/CoreText off the main actor. No SwiftUI view is rendered during export. The completed staging file atomically replaces the selected destination; cancellation/failure removes staging data and never reports partial success.
+
+JSON with both frame and aggregate options selected uses the complete `AnalysisResult` schema and round-trips with ISO-8601 dates. Deselecting an option omits that payload; identities, stream metadata, definitions, model/engine hashes, transforms and coverage stay present. Nonfinite values retain typed string/null representations. CSV uses a consistent record table with provenance, frame, native pool and aggregate rows; the provenance record contains the same metadata JSON. CSV frame rows preserve both original PTS and exact normalized timestamps. PDF includes stored source identities and native VMAF/XPSNR/CAMBI aggregates. No export consults `UserDefaults` or current picker selections.
+
+## Verification
+
+Run the shared scheme with ad-hoc signing as documented in `CONTRIBUTING.md`. Focused suites are `WorkflowTests`, `WorkflowPlaybackTests` and `ExportTests`. They cover double start; Cancel→Clear/Remove/Restart; independently cancelled batch jobs; source/profile invalidation; failure after rerun; queue limits; native decoded frame PTS; native pooling/infinity tradeoffs; schema/CSV identity and timestamp roundtrip; selected payload omission; bounded PDF page/text content; and destination preservation/staging cleanup on cancellation.
+
+A generated PDF fixture is rendered with Poppler and inspected for text wrapping, spacing, graph visibility and page bounds. Native UI review also uses burned-in frame/time fixtures so a requested timestamp cannot masquerade as proof that the correct frame is visible. Cross-product fixed-task evidence and resource measurements are tracked separately in the performance/acceptance documents.

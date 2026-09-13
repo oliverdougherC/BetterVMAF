@@ -43,9 +43,13 @@ struct ReviewSummary: Sendable {
         var candidates: [ReviewConcern] = []
         // Feature logs retain many implementation signals. Review only named measurements.
         for definition in analysis.definitions {
-            let observations = analysis.samples.map {
-                ReviewObservation(frame: $0.pair.index, time: $0.pair.timestamp, duration: $0.pair.duration,
-                                  value: $0.values[definition.id]?.doubleValue)
+            guard !Task.isCancelled else { return Self(concerns: [], distributions: []) }
+            var observations: [ReviewObservation] = []
+            observations.reserveCapacity(analysis.samples.count)
+            for sample in analysis.samples {
+                if sample.pair.index % 2048 == 0, Task.isCancelled { return Self(concerns: [], distributions: []) }
+                observations.append(ReviewObservation(frame: sample.pair.index, time: sample.pair.timestamp, duration: sample.pair.duration,
+                                  value: sample.values[definition.id]?.doubleValue))
             }
             let summary = summarize(observations, id: definition.id, name: definition.name,
                                     unit: definition.unit, lowerIsBetter: definition.direction == "lower")
@@ -77,8 +81,14 @@ struct ReviewSummary: Sendable {
 
     static func summarize(_ observations: [ReviewObservation], id: String, name: String, unit: String,
                           lowerIsBetter: Bool) -> (ReviewDistribution, [ReviewConcern]) {
+        let cancelled = ReviewDistribution(metricID: id, name: name, unit: unit, validCount: 0, missingCount: observations.count,
+            coverageSeconds: 0, durationWeightedMean: .unavailable, median: .unavailable, tail: .unavailable, extreme: .unavailable,
+            tailLabel: lowerIsBetter ? "P95" : "P5")
+        guard !Task.isCancelled else { return (cancelled, []) }
         let valid = observations.filter { $0.value != nil && !$0.value!.isNaN && $0.duration > 0 && $0.duration.isFinite }
+        guard !Task.isCancelled else { return (cancelled, []) }
         let sorted = valid.sorted { $0.value! < $1.value! }
+        guard !Task.isCancelled else { return (cancelled, []) }
         let duration = valid.reduce(0) { $0 + $1.duration }
         func quantile(_ fraction: Double) -> Double? {
             guard !sorted.isEmpty else { return nil }
@@ -110,6 +120,7 @@ struct ReviewSummary: Sendable {
             active = nil
         }
         for observation in observations {
+            if observation.frame % 2048 == 0, Task.isCancelled { return (cancelled, []) }
             guard let value = observation.value, !value.isNaN,
                   (lowerIsBetter ? value >= tail && value > median : value <= tail && value < median) else { finish(); continue }
             if var current = active, observation.frame == current.lastFrame + 1,

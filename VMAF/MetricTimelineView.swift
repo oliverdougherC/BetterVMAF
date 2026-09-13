@@ -11,6 +11,7 @@ struct MetricTimelineView: View {
     var onSeek: ((Double) -> Void)? = nil
     @State private var plotted: [TimelinePoint] = []
     @State private var domain: ClosedRange<Double> = 0...1
+    @State private var singletonSegments: Set<Int> = []
     @State private var hovered: TimelinePoint?
     @State private var zoom = 1.0
     @State private var position = 0.0
@@ -40,11 +41,12 @@ struct MetricTimelineView: View {
             GeometryReader { geometry in
                 Chart {
                     ForEach(plotted) { point in
-                        LineMark(x: .value("Time (seconds)", point.time), y: .value(name, point.value))
+                        LineMark(x: .value("Time (seconds)", point.time), y: .value(name, point.value), series: .value("Finite interval", point.segment))
                             .foregroundStyle(Color.accentColor)
-                    }
-                    if plotted.count == 1, let point = plotted.first {
-                        PointMark(x: .value("Time (seconds)", point.time), y: .value(name, point.value))
+                        if singletonSegments.contains(point.segment) {
+                            PointMark(x: .value("Time (seconds)", point.time), y: .value(name, point.value))
+                                .foregroundStyle(Color.accentColor)
+                        }
                     }
                     if let selectedTime, visibleRange.contains(selectedTime) {
                         RuleMark(x: .value("Selected frame", selectedTime)).foregroundStyle(.secondary)
@@ -76,12 +78,21 @@ struct MetricTimelineView: View {
                     let range = visibleRange
                     let buckets = max(32, min(1000, Int(geometry.size.width)))
                     let preparation = Task.detached(priority: .userInitiated) {
-                        (TimelineData.envelope(input, range: range, buckets: buckets), TimelineData.domain(input))
+                        let reduced = TimelineData.envelope(input, range: range, buckets: buckets)
+                        let counts = Dictionary(grouping: reduced, by: \.segment).mapValues(\.count)
+                        return (reduced, Set(counts.filter { $0.value == 1 }.keys))
                     }
                     let result = await withTaskCancellationHandler { await preparation.value } onCancel: { preparation.cancel() }
                     guard !Task.isCancelled else { return }
                     plotted = result.0
-                    domain = result.1
+                    singletonSegments = result.1
+                }
+                .task(id: revision) {
+                    let input = points
+                    let preparation = Task.detached(priority: .utility) { TimelineData.domain(input) }
+                    let prepared = await withTaskCancellationHandler { await preparation.value } onCancel: { preparation.cancel() }
+                    guard !Task.isCancelled else { return }
+                    domain = prepared
                 }
                 .accessibilityLabel("\(name) timeline, \(points.count) measured frames. Higher and lower values use the metric's native scale.")
             }

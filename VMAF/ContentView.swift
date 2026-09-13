@@ -1,10 +1,3 @@
-//
-//  ContentView.swift
-//  VMAF
-//
-//  Created by Oliver Dougherty on 3/4/25.
-//
-
 import SwiftUI
 import UniformTypeIdentifiers
 import AppKit
@@ -12,456 +5,130 @@ import AppKit
 struct ContentView: View {
     var body: some View {
         TabView {
-            VMAFView()
-                .tabItem {
-                    Label("Single", systemImage: "1.circle")
-                }
-            
-            VMAFBatchView()
-                .tabItem {
-                    Label("Batch", systemImage: "tray.full")
-                }
+            VMAFView().tabItem { Label("Compare", systemImage: "rectangle.split.2x1") }
+            VMAFBatchView().tabItem { Label("Batch", systemImage: "tray.full") }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(minWidth: 760, minHeight: 600)
     }
 }
 
 struct VMAFView: View {
-    @State private var referenceVideo: URL?
-    @State private var comparisonVideo: URL?
-    @State private var vmafResult: VMAFCalculator.VMAFResult?
-    @State private var isCalculating = false
-    @State private var errorMessage: String?
-    @State private var errorDetails: String?
-    @State private var showErrorDetails = false
-    @State private var ffmpegExitStatus: Int32?
-    @State private var showGraph = false  // Graph hidden by default
-    @State private var visualizationType: VisualizationType = .line
-    @State private var showExportOptions = false
-    
-    // New state variables for progress display
-    @State private var currentFrame: Int = 0
-    @State private var currentFPS: Double = 0
-    @State private var progress: Double = 0
-    @State private var totalFrames: Int?
-    @State private var showCommandSheet = false
-    @State private var ffmpegCommand: String = ""
-    
-    private let calculator = VMAFCalculator()
-    
-    enum VisualizationType {
-        case line
-        case heatmap
-    }
-    
+    @StateObject private var session = ComparisonSession()
+    @State private var setupExpanded = true
     var body: some View {
-        VStack(spacing: 16) {
-            ScrollView {
-                VStack(spacing: 16) {
-                    Text("Better VMAF")
-                        .font(.title)
-                        .padding(.top)
-                    
-                    // Video Selection Section
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Video Selection")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        
-                        // Reference Video Selection
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Reference Video (Original)")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                if let url = referenceVideo {
-                                    Text(url.lastPathComponent)
-                                        .font(.system(.body, design: .monospaced))
-                                        .lineLimit(1)
-                                } else {
-                                    Text("Not Selected")
-                                        .font(.body)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            Spacer()
-                            Button(action: { selectVideo(for: \VMAFView.referenceVideo) }) {
-                                Label("Select", systemImage: "doc.badge.plus")
-                                    .font(.system(.body, design: .rounded))
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                        .padding()
-                        .background(Color(nsColor: .controlBackgroundColor))
-                        .cornerRadius(8)
-                        
-                        // Comparison Video Selection
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Comparison Video (Encoded)")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                if let url = comparisonVideo {
-                                    Text(url.lastPathComponent)
-                                        .font(.system(.body, design: .monospaced))
-                                        .lineLimit(1)
-                                } else {
-                                    Text("Not Selected")
-                                        .font(.body)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            Spacer()
-                            Button(action: { selectVideo(for: \VMAFView.comparisonVideo) }) {
-                                Label("Select", systemImage: "doc.badge.plus")
-                                    .font(.system(.body, design: .rounded))
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                        .padding()
-                        .background(Color(nsColor: .controlBackgroundColor))
-                        .cornerRadius(8)
+        ScrollViewReader { proxy in
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Compare your encode").font(.largeTitle.bold())
+                Text("Choose the original source and an encode, then inspect what changed.")
+                    .foregroundStyle(.secondary)
+                DisclosureGroup("Source, encode and viewing profile", isExpanded: $setupExpanded) {
+                HStack(alignment: .top) {
+                    VideoInputCard(title: "Source · original", url: session.source, disabled: session.isBusy) {
+                        session.select($0, source: true)
                     }
-                    .padding(.horizontal)
-                    
-                    // Calculate Button
-                    Button(action: calculateVMAF) {
-                        if isCalculating {
-                            ProgressView()
-                                .controlSize(.large)
-                        } else {
-                            Label("Calculate VMAF", systemImage: "chart.bar.fill")
-                                .font(.system(.body, design: .rounded))
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(referenceVideo == nil || comparisonVideo == nil || isCalculating)
-                    .controlSize(.large)
-                    
-                    // Progress Display (Only visible when calculating)
-                    if isCalculating {
-                        VStack(alignment: .leading, spacing: 8) {
-                            ProgressView(value: progress > 0 ? progress / 100 : nil)
-                                .progressViewStyle(.linear)
-                            
-                            HStack {
-                                if let total = totalFrames, total > 0 {
-                                    Text("Progress: Frame \(currentFrame) of \(total)")
-                                        .foregroundColor(.secondary)
-                                    Spacer()
-                                    let percent = min(100, max(0, Double(currentFrame) / Double(total) * 100))
-                                    Text(String(format: "%.1f%%", percent))
-                                        .foregroundColor(.secondary)
-                                } else {
-                                    Text("Progress: Frame \(currentFrame)")
-                                        .foregroundColor(.secondary)
-                                }
-                                Spacer()
-                                Text("\(String(format: "%.1f", currentFPS)) FPS")
-                                    .foregroundColor(.secondary)
-                            }
-                            .font(.caption)
-                            
-                            Button("Show FFmpeg Command") {
-                                ffmpegCommand = calculator.getLastCommand()
-                                showCommandSheet = true
-                            }
-                            .buttonStyle(.bordered)
-                            .font(.caption)
-                        }
-                        .padding()
-                        .background(Color(nsColor: .controlBackgroundColor))
-                        .cornerRadius(8)
-                        .padding(.horizontal)
-                    }
-                    
-                    // Results Section
-                    if let result = vmafResult {
-                        VStack(alignment: .leading, spacing: 16) {
-                            HStack {
-                                Text("Results")
-                                    .font(.headline)
-                                    .foregroundColor(.secondary)
-                                
-                                Spacer()
-                                
-                                HStack(spacing: 8) {
-                                    Button(action: {
-                                        if showGraph && visualizationType == .line {
-                                            // If this button is active, deactivate it
-                                            showGraph = false
-                                        } else {
-                                            // Activate this button and deactivate the other
-                                            showGraph = true
-                                            visualizationType = .line
-                                        }
-                                    }) {
-                                        Label("Show Graph", systemImage: "chart.xyaxis.line")
-                                    }
-                                    .buttonStyle(.plain)
-                                    .padding(6)
-                                    .background(showGraph && visualizationType == .line ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
-                                    .foregroundColor(showGraph && visualizationType == .line ? .white : .primary)
-                                    .cornerRadius(6)
-                                    .controlSize(.small)
-                                    
-                                    Button(action: {
-                                        if showGraph && visualizationType == .heatmap {
-                                            // If this button is active, deactivate it
-                                            showGraph = false
-                                        } else {
-                                            // Activate this button and deactivate the other
-                                            showGraph = true
-                                            visualizationType = .heatmap
-                                        }
-                                    }) {
-                                        Label("Show Heat Map", systemImage: "chart.bar.fill")
-                                    }
-                                    .buttonStyle(.plain)
-                                    .padding(6)
-                                    .background(showGraph && visualizationType == .heatmap ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
-                                    .foregroundColor(showGraph && visualizationType == .heatmap ? .white : .primary)
-                                    .cornerRadius(6)
-                                    .controlSize(.small)
-                                    
-                                    Divider()
-                                        .frame(height: 16)
-                                    
-                                    Button(action: { showExportOptions = true }) {
-                                        Label("Export", systemImage: "square.and.arrow.up")
-                                    }
-                                    .buttonStyle(.plain)
-                                    .padding(6)
-                                    .background(Color(nsColor: .controlBackgroundColor))
-                                    .cornerRadius(6)
-                                    .controlSize(.small)
-                                }
-                            }
-                            
-                            VStack(alignment: .leading, spacing: 12) {
-                                ResultRow(title: "VMAF Score", value: result.score)
-                                ResultRow(title: "Range", value: "\(String(format: "%.2f", result.minScore)) to \(String(format: "%.2f", result.maxScore))")
-                                ResultRow(title: "Harmonic Mean", value: result.harmonicMean)
-                            }
-                            
-                            // Graph View (only shown when toggled)
-                            if showGraph {
-                                if visualizationType == .line {
-                                    VMAFGraphView(frameMetrics: result.frameMetrics)
-                                        .frame(minHeight: 300, maxHeight: 500)
-                                } else {
-                                    HeatMapView(frameMetrics: result.frameMetrics)
-                                        .frame(minHeight: 300, maxHeight: 500)
-                                }
-                            }
-                        }
-                        .padding()
-                        .background(Color(nsColor: .controlBackgroundColor))
-                        .cornerRadius(8)
-                        .padding(.horizontal)
-                    }
-                    
-                    if let error = errorMessage {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(error)
-                                .font(.callout)
-                                .foregroundColor(.red)
-                            
-                            HStack(spacing: 8) {
-                                Button(action: { copyErrorToClipboard(errorDetails ?? error) }) {
-                                    Label("Copy Error", systemImage: "doc.on.doc")
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                                
-                                if let details = errorDetails, !details.isEmpty {
-                                    Button(action: { showErrorDetails.toggle() }) {
-                                        Label(showErrorDetails ? "Hide Details" : "Show Details", systemImage: "info.circle")
-                                    }
-                                    .buttonStyle(.bordered)
-                                    .controlSize(.small)
-                                }
-                            }
-                            
-                            if showErrorDetails, let details = errorDetails {
-                                ScrollView {
-                                    Text(details)
-                                        .font(.system(.caption, design: .monospaced))
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                .frame(maxHeight: 200)
-                                .padding(8)
-                                .background(Color(nsColor: .textBackgroundColor))
-                                .cornerRadius(6)
-                            }
-                        }
-                        .padding()
-                        .background(Color(nsColor: .controlBackgroundColor))
-                        .cornerRadius(8)
-                        .padding(.horizontal)
+                    VideoInputCard(title: "Encode · comparison", url: session.encode, disabled: session.isBusy) {
+                        session.select($0, source: false)
                     }
                 }
-                .padding()
+                DisclosureGroup("Viewing assumptions") {
+                    Picker("Viewing profile", selection: Binding(get: { session.configuration.viewingProfile }, set: { session.selectProfile($0) })) {
+                        ForEach(AnalysisConfiguration.ViewingProfile.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }.disabled(session.isBusy)
+                    Text("SDR, equal canvas, strict matched timestamps. The profile describes the model's viewing assumptions.").font(.caption).foregroundStyle(.secondary)
+                }
+                }
+                HStack {
+                    Button("Analyze", systemImage: "waveform.path.ecg", action: session.start)
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.return, modifiers: .command)
+                        .accessibilityIdentifier("analyzeComparison")
+                        .disabled(session.isBusy || session.source == nil || session.encode == nil)
+                    if session.isBusy {
+                        ProgressView().controlSize(.small)
+                        Text(session.state == .cancelling ? "Stopping analysis…" : "Analyzing every matched frame…")
+                            .foregroundStyle(.secondary)
+                        Button("Cancel", action: session.cancel).disabled(session.state == .cancelling)
+                    }
+                }
+                if let progress = session.progress, session.isBusy { AnalysisProgressView(progress: progress) }
+                if let error = session.error {
+                    Text(error).foregroundStyle(.red).textSelection(.enabled).accessibilityIdentifier("analysisError")
+                }
+                if let result = session.result {
+                    ComparisonResultView(result: result, onInspect: {
+                        withAnimation { proxy.scrollTo("viewer-\(result.analysis?.runID.uuidString ?? "legacy")", anchor: .top) }
+                    }).id("comparisonResult")
+                }
+            }.padding(24)
+        }
+        .onChange(of: session.result?.analysis?.runID) { _, id in
+            guard id != nil else { setupExpanded = true; return }
+            setupExpanded = false
+            Task { @MainActor in
+                await Task.yield()
+                withAnimation { proxy.scrollTo("comparisonResult", anchor: .top) }
             }
         }
-        .frame(minWidth: 500, minHeight: 400)  // Reduced minimum size
-        .background(Color(nsColor: .windowBackgroundColor))
-        .sheet(isPresented: $showExportOptions) {
-            ExportOptionsView(result: vmafResult!)
         }
-        .sheet(isPresented: $showCommandSheet) {
-            VStack(spacing: 16) {
-                Text("FFmpeg Command")
-                    .font(.headline)
-                
-                ScrollView {
-                    Text(ffmpegCommand)
-                        .font(.system(.body, design: .monospaced))
-                        .padding()
-                        .textSelection(.enabled)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(nsColor: .textBackgroundColor))
-                .cornerRadius(8)
-                
-                Button("Close") {
-                    showCommandSheet = false
-                }
-                .buttonStyle(.borderedProminent)
-            }
-            .padding()
-            .frame(width: 600, height: 300)
-        }
-    }
-    
-    private func selectVideo(for keyPath: ReferenceWritableKeyPath<VMAFView, URL?>) {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowedContentTypes = [.movie]
-        
-        if panel.runModal() == .OK, let url = panel.url {
-            self[keyPath: keyPath] = url
-            
-            // Store the path for PDF export
-            if keyPath == \VMAFView.referenceVideo {
-                UserDefaults.standard.set(url, forKey: "LastReferenceVideo")
-            } else if keyPath == \VMAFView.comparisonVideo {
-                UserDefaults.standard.set(url, forKey: "LastComparisonVideo")
-            }
-        }
-    }
-    
-    private func calculateVMAF() {
-        guard let reference = referenceVideo,
-              let comparison = comparisonVideo else { return }
-        
-        isCalculating = true
-        errorMessage = nil
-        errorDetails = nil
-        showErrorDetails = false
-        ffmpegExitStatus = nil
-        currentFrame = 0
-        currentFPS = 0
-        progress = 0
-        totalFrames = nil
-        
-        // Set self as delegate to receive progress updates
-        calculator.delegate = self
-        
-        Task {
-            do {
-                let result = try await calculator.calculateVMAF(
-                    referenceVideo: reference,
-                    comparisonVideo: comparison
-                )
-                await MainActor.run {
-                    self.vmafResult = result
-                    self.isCalculating = false
-                    // Make sure we have the command even after calculation completes
-                    self.ffmpegCommand = calculator.getLastCommand()
-                }
-            } catch {
-                await MainActor.run {
-                    self.errorMessage = error.localizedDescription
-                    self.errorDetails = buildErrorDetails(error: error)
-                    self.ffmpegExitStatus = calculator.getLastTerminationStatus()
-                    self.isCalculating = false
-                }
-            }
-        }
-        
-        // Get the command as soon as calculation starts
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.ffmpegCommand = calculator.getLastCommand()
-        }
-    }
-    
-    private func copyErrorToClipboard(_ message: String) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(message, forType: .string)
-    }
-    
-    private func buildErrorDetails(error: Error) -> String {
-        var parts: [String] = []
-        parts.append("Error: \(error.localizedDescription)")
-        parts.append("Raw: \(String(describing: error))")
-        
-        if let status = calculator.getLastTerminationStatus() {
-            parts.append("FFmpeg exit status: \(status)")
-        }
-        
-        let ffmpegOutput = calculator.getLastErrorOutput()
-        if !ffmpegOutput.isEmpty {
-            parts.append("FFmpeg Output:\n\(ffmpegOutput)")
-        }
-        
-        let command = calculator.getLastCommand()
-        if !command.isEmpty {
-            parts.append("Last Command:\n\(command)")
-        }
-        
-        return parts.joined(separator: "\n\n")
+        .onDisappear { session.cancel() }
     }
 }
 
-// Add conformance to VMAFCalculatorDelegate
-extension VMAFView: VMAFCalculator.VMAFCalculatorDelegate {
-    func vmafCalculatorDidUpdateProgress(frameCount: Int, fps: Double, progress: Double, totalFrames: Int) {
-        self.currentFrame = frameCount
-        self.currentFPS = fps
-        self.totalFrames = totalFrames > 0 ? totalFrames : nil
-        if let total = self.totalFrames, total > 0 {
-            self.progress = min(100, max(0, Double(frameCount) / Double(total) * 100))
-        } else {
-            self.progress = progress
+struct VideoInputCard: View {
+    let title: String
+    let url: URL?
+    let disabled: Bool
+    let select: (URL) -> Void
+    @State private var targeted = false
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title).font(.headline)
+            Text(url?.lastPathComponent ?? "Drop a video here")
+                .lineLimit(2).truncationMode(.middle).frame(maxWidth: .infinity, alignment: .leading)
+                .help(url?.path ?? "Choose a local video")
+            Button(url == nil ? "Choose video…" : "Change video…") {
+                VideoSelection.choose { if let first = $0.first { select(first) } }
+            }.disabled(disabled)
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 110, alignment: .topLeading)
+        .background(targeted ? Color.accentColor.opacity(0.12) : Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+        .dropDestination(for: URL.self) { urls, _ in
+            guard !disabled, let url = urls.first, url.isFileURL else { return false }
+            select(url); return true
+        } isTargeted: { targeted = $0 }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
+    }
+}
+
+@MainActor
+enum VideoSelection {
+    static func choose(multiple: Bool = false, completion: @escaping ([URL]) -> Void) {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = multiple
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [.movie, .video, .data]
+        panel.begin { response in if response == .OK { completion(panel.urls) } }
     }
 }
 
 struct ResultRow: View {
     let title: String
-    let value: Any
-    
+    let value: String
+    init(title: String, value: String) { self.title = title; self.value = value }
+    init(title: String, value: Double) { self.init(title: title, value: String(format: "%.2f", value)) }
+    var body: some View { HStack { Text(title); Spacer(); Text(value).monospacedDigit() } }
+}
+
+struct AnalysisProgressView: View {
+    let progress: AnalysisProgress
     var body: some View {
-        HStack {
-            Text(title)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            Spacer()
-            if let doubleValue = value as? Double {
-                Text(String(format: "%.2f", doubleValue))
-                    .font(.system(.body, design: .monospaced))
-            } else if let stringValue = value as? String {
-                Text(stringValue)
-                    .font(.system(.body, design: .monospaced))
-            }
+        VStack(alignment: .leading, spacing: 4) {
+            ProgressView(value: progress.fraction)
+            Text("Frame \(progress.frameCount)" + (progress.totalFrames.map { " of \($0)" } ?? "") + String(format: " · %.1f processing fps", progress.processingFPS))
+                .font(.caption).foregroundStyle(.secondary).monospacedDigit()
         }
     }
 }
-
-#Preview {
-    VMAFView()
-} 
