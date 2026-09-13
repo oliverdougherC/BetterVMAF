@@ -90,3 +90,4 @@ temp_dmg/
 
 # Local execution/visual-review state
 .omx/
+__pycache__/

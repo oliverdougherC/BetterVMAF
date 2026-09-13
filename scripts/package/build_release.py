@@ -35,7 +35,7 @@ def main():
             built_app = args.app.resolve()
         else:
             build = work / 'Build'
-            run(['xcodebuild', '-project', ROOT / 'VMAF.xcodeproj', '-scheme', 'VMAF', '-configuration', 'Release', '-destination', 'generic/platform=macOS', '-derivedDataPath', work / 'DerivedData', 'CONFIGURATION_BUILD_DIR=' + str(build), 'ARCHS=arm64', 'ONLY_ACTIVE_ARCH=YES', 'INFOPLIST_KEY_BetterVMAFSourceCommit=' + source_commit, 'CODE_SIGNING_ALLOWED=NO', 'build'], cwd=ROOT)
+            run(['xcodebuild', '-project', ROOT / 'VMAF.xcodeproj', '-scheme', 'VMAF', '-configuration', 'Release', '-destination', 'generic/platform=macOS', '-derivedDataPath', work / 'DerivedData', 'CONFIGURATION_BUILD_DIR=' + str(build), 'ARCHS=arm64', 'ONLY_ACTIVE_ARCH=YES', 'BETTERVMAF_SOURCE_COMMIT=' + source_commit, 'CODE_SIGNING_ALLOWED=NO', 'build'], cwd=ROOT)
             built_app = build / 'Better VMAF.app'
         if not built_app.is_dir():
             raise RuntimeError(f'App missing: {built_app}')
@@ -53,7 +53,7 @@ def main():
         version = info['CFBundleShortVersionString']
         build_number = info['CFBundleVersion']
         if info.get('BetterVMAFSourceCommit') != source_commit:
-            raise RuntimeError('App source revision is missing or differs from this checkout. Rebuild with INFOPLIST_KEY_BetterVMAFSourceCommit=' + source_commit)
+            raise RuntimeError('App source revision is missing or differs from this checkout. Rebuild with BETTERVMAF_SOURCE_COMMIT=' + source_commit)
         executable = app / 'Contents/MacOS' / info['CFBundleExecutable']
         arch = subprocess.check_output(['lipo', '-archs', executable], text=True, env=BUILD_ENV).strip()
         if arch != 'arm64':

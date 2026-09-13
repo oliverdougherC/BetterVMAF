@@ -398,6 +398,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = arm64;
+				BETTERVMAF_SOURCE_COMMIT = development;
+				INFOPLIST_FILE = config/AppInfo.plist;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = VMAF/VMAF.entitlements;
@@ -433,6 +435,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = arm64;
+				BETTERVMAF_SOURCE_COMMIT = development;
+				INFOPLIST_FILE = config/AppInfo.plist;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = VMAF/VMAF.entitlements;
