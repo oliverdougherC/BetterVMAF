@@ -1,0 +1,181 @@
+{
+  "schema": 1,
+  "source_revision": "a7a9c787341cf703dede03c2009fa460cae5e5df",
+  "build_script": "scripts/experiments/build_ssimulacra2.sh",
+  "helper_sha256": "6d5635ff9ee7f375e750b074c07fdf286724e54320657be2a0fea7bc8c389a38",
+  "helper_bytes": 281856,
+  "architecture": "/Users/ofhd/Developer/BetterVMAF-corpus/upstream/libjxl/build/tools/ssimulacra2_linear: Mach-O 64-bit executable arm64\n",
+  "dependencies": "/Users/ofhd/Developer/BetterVMAF-corpus/upstream/libjxl/build/tools/ssimulacra2_linear:\n\t@rpath/libjxl.0.12.dylib (compatibility version 0.12.0, current version 0.12.0)\n\t/opt/homebrew/opt/giflib/lib/libgif.dylib (compatibility version 0.0.0, current version 7.2.0)\n\t/opt/homebrew/opt/jpeg-turbo/lib/libjpeg.8.dylib (compatibility version 8.0.0, current version 8.3.2)\n\t/opt/homebrew/opt/libpng/lib/libpng16.16.dylib (compatibility version 75.0.0, current version 75.0.0)\n\t/usr/lib/libz.1.dylib (compatibility version 1.0.0, current version 1.2.12)\n\t/opt/homebrew/opt/openexr/lib/libOpenEXR-3_4.33.dylib (compatibility version 33.0.0, current version 33.3.4)\n\t/opt/homebrew/opt/openexr/lib/libOpenEXRUtil-3_4.33.dylib (compatibility version 33.0.0, current version 33.3.4)\n\t/opt/homebrew/opt/openexr/lib/libOpenEXRCore-3_4.33.dylib (compatibility version 33.0.0, current version 33.3.4)\n\t/opt/homebrew/opt/openexr/lib/libIex-3_4.33.dylib (compatibility version 33.0.0, current version 33.3.4)\n\t/opt/homebrew/opt/openexr/lib/libIlmThread-3_4.33.dylib (compatibility version 33.0.0, current version 33.3.4)\n\t/opt/homebrew/opt/imath/lib/libImath-3_2.30.dylib (compatibility version 30.0.0, current version 30.3.2)\n\t@rpath/libjxl_threads.0.12.dylib (compatibility version 0.12.0, current version 0.12.0)\n\t@rpath/libjxl_cms.0.12.dylib (compatibility version 0.12.0, current version 0.12.0)\n\t/opt/homebrew/opt/brotli/lib/libbrotlidec.1.dylib (compatibility version 1.0.0, current version 1.2.0)\n\t/opt/homebrew/opt/brotli/lib/libbrotlicommon.1.dylib (compatibility version 1.0.0, current version 1.2.0)\n\t/opt/homebrew/opt/brotli/lib/libbrotlienc.1.dylib (compatibility version 1.0.0, current version 1.2.0)\n\t/opt/homebrew/opt/highway/lib/libhwy.1.dylib (compatibility version 1.0.0, current version 1.4.0)\n\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2100.43.0)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)\n",
+  "results": [
+    {
+      "size": [
+        640,
+        360
+      ],
+      "reference": {
+        "command": [
+          "/Users/ofhd/Developer/BetterVMAF-corpus/upstream/libjxl/build/tools/ssimulacra2",
+          "/Users/ofhd/Developer/BetterVMAF-corpus/ssimulacra2/ref_640.exr",
+          "/Users/ofhd/Developer/BetterVMAF-corpus/ssimulacra2/color_640.exr"
+        ],
+        "seconds": 0.06484624999575317,
+        "peak_rss_bytes": 55721984,
+        "returncode": 0,
+        "score": 67.79802806,
+        "stderr": "        0.05 real         0.03 user         0.00 sys\n            55721984  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n                3584  page reclaims\n                 133  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                  12  voluntary context switches\n                 102  involuntary context switches\n           510594898  instructions retired\n           168909903  cycles elapsed\n            52937136  peak memory footprint\n"
+      },
+      "adapter": {
+        "command": [
+          "/Users/ofhd/Developer/BetterVMAF-corpus/upstream/libjxl/build/tools/ssimulacra2_linear",
+          "640",
+          "360",
+          "/Users/ofhd/Developer/BetterVMAF-corpus/ssimulacra2/ref_640.f32",
+          "/Users/ofhd/Developer/BetterVMAF-corpus/ssimulacra2/color_640.f32"
+        ],
+        "seconds": 0.032560167004703544,
+        "peak_rss_bytes": 43630592,
+        "returncode": 0,
+        "score": 67.79802806,
+        "stderr": "        0.02 real         0.01 user         0.00 sys\n            43630592  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n                2958  page reclaims\n                  22  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   0  voluntary context switches\n                  34  involuntary context switches\n           339712231  instructions retired\n            92309324  cycles elapsed\n            41288088  peak memory footprint\n"
+      },
+      "difference": 0.0
+    },
+    {
+      "size": [
+        1920,
+        1080
+      ],
+      "reference": {
+        "command": [
+          "/Users/ofhd/Developer/BetterVMAF-corpus/upstream/libjxl/build/tools/ssimulacra2",
+          "/Users/ofhd/Developer/BetterVMAF-corpus/ssimulacra2/ref_1920.exr",
+          "/Users/ofhd/Developer/BetterVMAF-corpus/ssimulacra2/color_1920.exr"
+        ],
+        "seconds": 0.3473859999940032,
+        "peak_rss_bytes": 448479232,
+        "returncode": 0,
+        "score": 69.57499375,
+        "stderr": "        0.34 real         0.29 user         0.05 sys\n           448479232  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n               27677  page reclaims\n                  10  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   0  voluntary context switches\n                 139  involuntary context switches\n          3429999514  instructions retired\n          1166675307  cycles elapsed\n           445973320  peak memory footprint\n"
+      },
+      "adapter": {
+        "command": [
+          "/Users/ofhd/Developer/BetterVMAF-corpus/upstream/libjxl/build/tools/ssimulacra2_linear",
+          "1920",
+          "1080",
+          "/Users/ofhd/Developer/BetterVMAF-corpus/ssimulacra2/ref_1920.f32",
+          "/Users/ofhd/Developer/BetterVMAF-corpus/ssimulacra2/color_1920.f32"
+        ],
+        "seconds": 0.206715708001866,
+        "peak_rss_bytes": 394706944,
+        "returncode": 0,
+        "score": 69.57499375,
+        "stderr": "        0.20 real         0.15 user         0.04 sys\n           394706944  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n               24402  page reclaims\n                   8  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   0  voluntary context switches\n                 135  involuntary context switches\n          2166730988  instructions retired\n           689092606  cycles elapsed\n           392643376  peak memory footprint\n"
+      },
+      "difference": 0.0
+    },
+    {
+      "size": [
+        3840,
+        2160
+      ],
+      "reference": {
+        "command": [
+          "/Users/ofhd/Developer/BetterVMAF-corpus/upstream/libjxl/build/tools/ssimulacra2",
+          "/Users/ofhd/Developer/BetterVMAF-corpus/ssimulacra2/ref_3840.exr",
+          "/Users/ofhd/Developer/BetterVMAF-corpus/ssimulacra2/color_3840.exr"
+        ],
+        "seconds": 1.4708460419933544,
+        "peak_rss_bytes": 1740816384,
+        "returncode": 0,
+        "score": 75.35586973,
+        "stderr": "        1.46 real         1.13 user         0.21 sys\n          1740816384  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n              107338  page reclaims\n                  21  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   0  voluntary context switches\n                2484  involuntary context switches\n         13062837331  instructions retired\n          4746274482  cycles elapsed\n          1740080856  peak memory footprint\n"
+      },
+      "adapter": {
+        "command": [
+          "/Users/ofhd/Developer/BetterVMAF-corpus/upstream/libjxl/build/tools/ssimulacra2_linear",
+          "3840",
+          "2160",
+          "/Users/ofhd/Developer/BetterVMAF-corpus/ssimulacra2/ref_3840.f32",
+          "/Users/ofhd/Developer/BetterVMAF-corpus/ssimulacra2/color_3840.f32"
+        ],
+        "seconds": 0.972202125005424,
+        "peak_rss_bytes": 1528479744,
+        "returncode": 0,
+        "score": 75.35586973,
+        "stderr": "        0.96 real         0.65 user         0.23 sys\n          1528479744  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n              102499  page reclaims\n                   8  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   0  voluntary context switches\n                2463  involuntary context switches\n          8561496476  instructions retired\n          3168823098  cycles elapsed\n          1528677960  peak memory footprint\n"
+      },
+      "difference": 0.0
+    }
+  ],
+  "managed_decode": {
+    "command": [
+      "ffmpeg",
+      "-v",
+      "error",
+      "-i",
+      "/Users/ofhd/Developer/BetterVMAF-corpus/generated/gradient.mkv",
+      "-frames:v",
+      "1",
+      "-vf",
+      "zscale=transfer=linear:primaries=bt709:matrix=gbr:range=full,format=gbrpf32le",
+      "-f",
+      "rawvideo",
+      "-"
+    ],
+    "source_sha256": "e2ccf4f9b56cea3d4836887471a6770b322da787848e6e15071e497f6aec7ac0",
+    "analytical_bt1886_display_max_abs_error": 3.55839729309082e-05,
+    "scene_inverse_oetf_max_abs_difference": 0.07246747612953186,
+    "transfer_contract": "Display-referred BT.709 uses ideal BT.1886 gamma2.4 in zimg; scene-referred inverse camera OETF is a different contract.",
+    "gray_threshold": 0.0001,
+    "identity": {
+      "command": [
+        "/Users/ofhd/Developer/BetterVMAF-corpus/upstream/libjxl/build/tools/ssimulacra2_linear",
+        "640",
+        "360",
+        "/Users/ofhd/Developer/BetterVMAF-corpus/ssimulacra2/decoded_linear.f32",
+        "/Users/ofhd/Developer/BetterVMAF-corpus/ssimulacra2/decoded_linear.f32"
+      ],
+      "seconds": 0.034106457998859696,
+      "peak_rss_bytes": 43614208,
+      "returncode": 0,
+      "score": 100.0,
+      "stderr": "        0.03 real         0.01 user         0.00 sys\n            43614208  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n                2971  page reclaims\n                   8  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   0  voluntary context switches\n                  36  involuntary context switches\n           341438725  instructions retired\n            98737598  cycles elapsed\n            41271704  peak memory footprint\n"
+    },
+    "scope": "Gray ramp tests transfer/range; gamut/chroma interpolation not fully qualified for app."
+  },
+  "signed": {
+    "command": [
+      "/Users/ofhd/Developer/BetterVMAF-corpus/upstream/libjxl/build/tools/ssimulacra2_linear",
+      "640",
+      "360",
+      "/Users/ofhd/Developer/BetterVMAF-corpus/ssimulacra2/ref_640.f32",
+      "/Users/ofhd/Developer/BetterVMAF-corpus/ssimulacra2/negative.f32"
+    ],
+    "seconds": 0.03663933298958,
+    "peak_rss_bytes": 43958272,
+    "returncode": 0,
+    "score": -173.27645098,
+    "stderr": "        0.03 real         0.02 user         0.00 sys\n            43958272  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n                2995  page reclaims\n                   8  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   3  voluntary context switches\n                  60  involuntary context switches\n           337379686  instructions retired\n            97226088  cycles elapsed\n            41615768  peak memory footprint\n"
+  },
+  "truncated": {
+    "command": [
+      "/Users/ofhd/Developer/BetterVMAF-corpus/upstream/libjxl/build/tools/ssimulacra2_linear",
+      "640",
+      "360",
+      "/Users/ofhd/Developer/BetterVMAF-corpus/ssimulacra2/truncated.f32",
+      "/Users/ofhd/Developer/BetterVMAF-corpus/ssimulacra2/ref_640.f32"
+    ],
+    "seconds": 0.013400166993960738,
+    "peak_rss_bytes": 3932160,
+    "returncode": 3,
+    "score": null,
+    "stderr": "        0.00 real         0.00 user         0.00 sys\n             3932160  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n                 551  page reclaims\n                   6  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   0  voluntary context switches\n                  10  involuntary context switches\n            92765168  instructions retired\n            28648353  cycles elapsed\n             2048360  peak memory footprint\n"
+  },
+  "cancellation": {
+    "active_before_cancel": true,
+    "seconds": 0.0027139169978909194,
+    "returncode": -15
+  },
+  "tolerance": 1e-06,
+  "tolerance_reason": "Same pinned upstream implementation, float32 arrays, architecture and CMS; JSON roundoff8decimals. This is conformance, not perceptual confidence."
+}

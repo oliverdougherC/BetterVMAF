@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "files": [
+    {
+      "path": "/Users/ofhd/Developer/BetterVMAF-corpus/generated/review_reference.mp4",
+      "sha256": "695f3d706e25218df30476db0aa78cda2e6971e459337806ae942a6bf8e0844a",
+      "source": "motion24",
+      "command": [
+        "ffmpeg",
+        "-v",
+        "error",
+        "-y",
+        "-i",
+        "/Users/ofhd/Developer/BetterVMAF-corpus/generated/motion24.mkv",
+        "-vf",
+        "setparams=range=limited:color_primaries=bt709:color_trc=bt709:colorspace=bt709",
+        "-c:v",
+        "libx264",
+        "-crf",
+        "0",
+        "-pix_fmt",
+        "yuv420p",
+        "-chroma_sample_location",
+        "left",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-colorspace",
+        "bt709",
+        "/Users/ofhd/Developer/BetterVMAF-corpus/generated/review_reference.mp4"
+      ]
+    },
+    {
+      "path": "/Users/ofhd/Developer/BetterVMAF-corpus/generated/review_sustained.mp4",
+      "sha256": "8aa96142b18b6d0e24d35ce0b00b4f3b666589771706b0d6dc1fe5e3492947f9",
+      "source": "damage_sustained",
+      "command": [
+        "ffmpeg",
+        "-v",
+        "error",
+        "-y",
+        "-i",
+        "/Users/ofhd/Developer/BetterVMAF-corpus/generated/damage_sustained.mkv",
+        "-vf",
+        "setparams=range=limited:color_primaries=bt709:color_trc=bt709:colorspace=bt709",
+        "-c:v",
+        "libx264",
+        "-crf",
+        "0",
+        "-pix_fmt",
+        "yuv420p",
+        "-chroma_sample_location",
+        "left",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-colorspace",
+        "bt709",
+        "/Users/ofhd/Developer/BetterVMAF-corpus/generated/review_sustained.mp4"
+      ]
+    }
+  ],
+  "interval": {
+    "start": 1.0,
+    "end_exclusive": 1.5,
+    "frames": [
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35
+    ]
+  },
+  "note": "Regenerated after initial comparison study to repair missing transfer/primaries tags. Earlier study hashes remain historical, not mislabeled as these files."
+}

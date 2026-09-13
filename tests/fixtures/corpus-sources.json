@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "archives": [
+    {
+      "filename": "bbb.zip",
+      "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_640x360.m4v.zip",
+      "sha256": "7118242b6728d40c871479c5b3c0f0fb27d748089df15d7f1b469f297c74a2d6",
+      "license": "CC-BY-3.0",
+      "license_url": "https://peach.blender.org/about/",
+      "attribution": "(c) 2008 Blender Foundation / www.bigbuckbunny.org",
+      "changes": "Audio removed; two-second excerpts scaled to 640-wide, original encoded aspect preserved with explicit square-pixel assumption, converted to FFV1 10-bit BT.709 limited SDR assumption. Teaser is already compressed.",
+      "extracted_filename": "BigBuckBunny_640x360.m4v",
+      "extracted_sha256": "738e2f999860553d056dd79c952f58f63cbb73892a57c72342ce9e5330d9d2d7"
+    },
+    {
+      "filename": "tears.zip",
+      "url": "https://download.blender.org/demo/movies/tears-of-steel_teaser.mp4.zip",
+      "sha256": "f394ebe25189045de4ffccaaa0edee280dfd4993e4b118629474adb0548a7984",
+      "license": "CC-BY-3.0",
+      "license_url": "https://mango.blender.org/sharing/",
+      "attribution": "(CC) Blender Foundation | mango.blender.org",
+      "changes": "Audio removed; two-second excerpts scaled to 640-wide, original encoded aspect preserved with explicit square-pixel assumption, converted to FFV1 10-bit BT.709 limited SDR assumption. Teaser is already compressed.",
+      "extracted_filename": "tears-of-steel_teaser.mp4",
+      "extracted_sha256": "25feaa713ecfc415528a8410466f531c75d4e75c6f5c76c81d624c825581e53b"
+    }
+  ]
+}

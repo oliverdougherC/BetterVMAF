@@ -1,0 +1,34 @@
+{
+  "venv_installed_bytes": 959772595,
+  "torch_bytes": 578631058,
+  "torchvision_bytes": 9173827,
+  "pycvvdp_bytes": 1784660,
+  "measurement": "Sum regular installed file lengths under venv before ruff tooling install; uncompressed disk bytes including Pythondependencies, not minimal production package.",
+  "energy_command": [
+    "powermetrics",
+    "--samplers",
+    "cpu_power",
+    "-n",
+    "1",
+    "-i",
+    "100"
+  ],
+  "energy_exit": 1,
+  "energy_stderr": "powermetrics must be invoked as the superuser",
+  "upstreams": [
+    {
+      "name": "libjxl",
+      "revision": "a7a9c787341cf703dede03c2009fa460cae5e5df",
+      "license": "BSD-3-Clause",
+      "source": "https://github.com/libjxl/libjxl",
+      "notice": "scripts/experiments/licenses/libjxl-LICENSE"
+    },
+    {
+      "name": "ColorVideoVDP",
+      "revision": "2a268bce8d56e2f3abde46df3927d8a633707a24",
+      "license": "MIT",
+      "source": "https://github.com/gfxdisp/ColorVideoVDP",
+      "notice": "scripts/experiments/licenses/ColorVideoVDP-LICENSE"
+    }
+  ]
+}

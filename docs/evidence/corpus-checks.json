@@ -1,0 +1,21 @@
+{
+  "engine_input_hashes_match": true,
+  "decoded_chroma_checks": {
+    "hue": {
+      "luma_exact": true,
+      "chroma_differs": true
+    },
+    "chroma_blur": {
+      "luma_exact": true,
+      "chroma_differs": true
+    },
+    "desaturate": {
+      "luma_exact": true,
+      "chroma_differs": true
+    },
+    "uv_corrupt": {
+      "luma_exact": true,
+      "chroma_differs": true
+    }
+  }
+}
