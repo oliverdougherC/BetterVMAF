@@ -58,7 +58,8 @@ struct ComparisonResultView: View {
                 if let definition = analysis.definitions.first(where: { $0.id == selectedMetric }) {
                     if let timeline, timeline.matches(runID: analysis.runID, metricID: selectedMetric) {
                         MetricTimelineView(points: timeline.points, name: definition.name, unit: definition.unit,
-                            revision: timeline.revision, selectedTime: playback.timestamp, onSeek: { playback.seek(time: $0) })
+                            revision: timeline.revision, selectedTime: playback.timestamp, onSeek: { playback.seek(time: $0) },
+                            timeDomain: 0...max(analysis.comparedDuration, 0.001))
                             .id(timeline.revision).frame(height: 230)
                     } else { ProgressView("Preparing \(definition.name) timeline…").frame(height: 230) }
                     Text("\(definition.direction == "lower" ? "Lower values indicate less measured banding." : "Higher values indicate greater measured source fidelity.") Nonfinite and unavailable values remain in the record and are omitted from the numeric line.").font(.caption).foregroundStyle(.secondary)

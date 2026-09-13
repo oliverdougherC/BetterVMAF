@@ -9,6 +9,7 @@ struct MetricTimelineView: View {
     var revision: UUID? = nil
     var selectedTime: Double? = nil
     var onSeek: ((Double) -> Void)? = nil
+    var timeDomain: ClosedRange<Double>? = nil
     @State private var plotted: [TimelinePoint] = []
     @State private var domain: ClosedRange<Double> = 0...1
     @State private var singletonSegments: Set<Int> = []
@@ -17,9 +18,7 @@ struct MetricTimelineView: View {
     @State private var position = 0.0
 
     private var fullRange: ClosedRange<Double> {
-        let start = points.first?.time ?? 0
-        let end = points.last?.time ?? 1
-        return start...max(start + 0.001, end)
+        TimelineData.timeRange(points, coverage: timeDomain)
     }
     private var visibleRange: ClosedRange<Double> {
         let span = fullRange.upperBound - fullRange.lowerBound
@@ -58,6 +57,13 @@ struct MetricTimelineView: View {
                 .chartYAxis { AxisMarks(values: .automatic(desiredCount: 5)) }
                 .chartXAxisLabel("Seconds")
                 .chartYAxisLabel(unit)
+                .overlay {
+                    if points.isEmpty {
+                        Text("No finite values to plot").foregroundStyle(.secondary)
+                            .padding(8).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+                            .allowsHitTesting(false)
+                    }
+                }
                 .chartOverlay { proxy in
                     GeometryReader { overlay in
                         Rectangle().fill(.clear).contentShape(Rectangle())
@@ -69,7 +75,7 @@ struct MetricTimelineView: View {
                                 }
                             }
                             .gesture(SpatialTapGesture().onEnded { event in
-                                if let point = sample(at: event.location, proxy: proxy, geometry: overlay) { onSeek?(point.time) }
+                                if let time = time(at: event.location, proxy: proxy, geometry: overlay) { onSeek?(time) }
                             })
                     }
                 }
@@ -94,7 +100,7 @@ struct MetricTimelineView: View {
                     guard !Task.isCancelled else { return }
                     domain = prepared
                 }
-                .accessibilityLabel("\(name) timeline, \(points.count) measured frames. Higher and lower values use the metric's native scale.")
+                .accessibilityLabel("\(name) timeline, \(points.count) finite measured values. Higher and lower values use the metric's native scale.")
             }
             .frame(minHeight: 140, idealHeight: 180)
             HStack {
@@ -113,10 +119,18 @@ struct MetricTimelineView: View {
     }
 
     private func sample(at location: CGPoint, proxy: ChartProxy, geometry: GeometryProxy) -> TimelinePoint? {
+        guard let selectedTime = time(at: location, proxy: proxy, geometry: geometry),
+              let point = TimelineData.nearest(points, time: selectedTime),
+              let anchor = proxy.plotFrame, let x = proxy.position(forX: point.time),
+              abs(x + geometry[anchor].minX - location.x) <= 12 else { return nil }
+        return point
+    }
+
+    private func time(at location: CGPoint, proxy: ChartProxy, geometry: GeometryProxy) -> Double? {
         guard let anchor = proxy.plotFrame else { return nil }
         let plot = geometry[anchor]
         guard plot.contains(location), let time: Double = proxy.value(atX: location.x - plot.minX) else { return nil }
-        return TimelineData.nearest(points, time: time)
+        return time
     }
 
     private struct PreparationKey: Hashable {

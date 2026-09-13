@@ -39,4 +39,10 @@ struct TimelineTests {
         #expect(reduced.allSatisfy { $0.segment == ($0.id < 500 ? 0 : 1) })
         #expect(Set(reduced.map(\.segment)) == [0, 1])
     }
+
+    @Test func missingOrInfiniteEdgesDoNotShrinkComparedTimeline() {
+        let finite = [TimelinePoint(id: 24, time: 1, value: 5), TimelinePoint(id: 35, time: 1.458, value: 6)]
+        #expect(TimelineData.timeRange(finite, coverage: 0...2) == 0...2)
+        #expect(TimelineData.timeRange([], coverage: 0...2) == 0...2)
+    }
 }

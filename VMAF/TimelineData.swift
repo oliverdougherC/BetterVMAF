@@ -13,6 +13,11 @@ struct TimelinePoint: Identifiable, Sendable, Equatable {
 
 /// Sorted immutable samples. Only visualization is reduced; callers retain raw data.
 enum TimelineData {
+    static func timeRange(_ points: [TimelinePoint], coverage: ClosedRange<Double>? = nil) -> ClosedRange<Double> {
+        if let coverage { return coverage }
+        let first = points.first?.time ?? 0
+        return first...max(first + 0.001, points.last?.time ?? 1)
+    }
     static func lowerBound(_ points: [TimelinePoint], time: Double) -> Int {
         var low = 0
         var high = points.count

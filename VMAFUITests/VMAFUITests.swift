@@ -14,7 +14,10 @@ final class VMAFUITests: XCTestCase {
         XCTAssertTrue(app.buttons["choose-Encode · comparison"].isHittable, app.debugDescription)
         let assumptions = app.disclosureTriangles["Viewing assumptions"]
         XCTAssertTrue(assumptions.exists)
-        assumptions.click()
+        // macOS15 includes the noninteractive label in this element's bounds.
+        // Activate the actual disclosure arrow at the leading edge.
+        assumptions.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5))
+            .withOffset(CGVector(dx: 6, dy: 0)).click()
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "viewingProfilePicker").firstMatch.waitForExistence(timeout: 2), app.debugDescription)
         XCTAssertFalse(analyze.isEnabled)
     }
