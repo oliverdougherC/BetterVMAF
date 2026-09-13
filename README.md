@@ -1,85 +1,53 @@
-# Better VMAF
+# BetterVMAF
 
-A native macOS application for calculating VMAF (Video Multi-Method Assessment Fusion) scores between two videos.
+A free native macOS app for comparing an encoded video against its source.
 
-## Features
+BetterVMAF currently calculates **VMAF v0.6.1** with bundled FFmpeg and displays summary statistics and per-frame charts. The next development phase expands that into a complementary quality profile, synchronized visual inspection, and clearer evidence of what an encode changed.
 
-- Native macOS interface
-- Single mode: quick, one-off comparisons with per-frame metrics and graphs
-- Batch mode: queue multiple comparison videos against one reference
-- 4K support with automatic model selection (1080p vs 4K) and clear mismatch errors
-- Detailed metrics including:
-  - VMAF score
-  - Score range (min/max)
-  - Harmonic mean
-- Real-time progress with frame counts (when available)
-- Copyable/expandable error details including last ffmpeg command and captured stderr
-- Support for common video containers and codecs
+## Available today
 
-## System Requirements
+- SwiftUI interface for one comparison or a queue of encodes against one reference.
+- VMAF mean, minimum, maximum, harmonic mean, and frame-level graphs.
+- Bundled legacy 1080p and 4K VMAF models with automatic selection.
+- CSV, JSON, and PDF export.
+- Progress and diagnostic output from FFmpeg.
 
-- macOS 13.0 or later
-- Self-contained FFmpeg 8.0.1 with libvmaf 3.0.0-122 (included in the app bundle)
+The current “heat map” is a colored score chart over time, not a spatial map of pixel damage. Multi-metric analysis and synchronized source/encode playback are planned capabilities.
 
-## Installation
+## Install
 
-1. Download the latest release from the [Releases](https://github.com/oliverdougherC/BetterVMAF/releases) page
-2. Open the downloaded `Better_VMAF.dmg` file
-3. Drag the "Better VMAF" app to your Applications folder
-4. The first time you run the app, you'll need to:
-   - Open the app
-   - Select "Done" on the security pop-up
-   - Navigate to System Settings > Security and Privacy
-   - Scroll down to the "Security" section
-   - Press "Open Anyway" next to the Better VMAF warning
-   - Provide your fingerprint or administrator password
+Download a DMG from [GitHub Releases](https://github.com/oliverdougherC/BetterVMAF/releases) and drag **Better VMAF** into Applications. Existing releases are not Developer ID signed; macOS may require opening the app through **System Settings → Privacy & Security**.
 
-This is necessary because the app is not signed with an Apple Developer ID. You only need to do this once.
+The current source project targets **macOS 15.2 or later**. Older release assets may differ. The checked-in FFmpeg executable is **Intel x86_64**, so its execution on Apple Silicon currently requires Rosetta. A native Apple Silicon engine is a high-priority roadmap item.
 
-## Development Setup
+## Understand the result
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/oliverdougherC/BetterVMAF
-   cd BetterVMAF
-   ```
+VMAF predicts perceived quality relative to a reference under a model's assumptions. **A score is not a percentage of retained quality, and 100 is not proof of identical pixels or invisible degradation.** Scores depend on the model, viewing assumptions, input correspondence, and preprocessing. Inspect the video when making an encoding decision.
 
-2. Open the project in Xcode:
-   ```bash
-   open VMAF.xcodeproj
-   ```
+Current limitations include a 30 fps assumption in displayed timestamps, incomplete alignment/color validation, and a batch cancellation race. See the [source audit](docs/REPOSITORY_AUDIT.md) for evidence and the development backlog for planned repairs.
 
-3. Build and run the project in Xcode
+## Develop
 
-## Building for Distribution
+```bash
+git clone https://github.com/oliverdougherC/BetterVMAF.git
+cd BetterVMAF
+open VMAF.xcodeproj
+```
 
-To create a DMG for distribution:
+Use the shared **VMAF** scheme. See [CONTRIBUTING.md](CONTRIBUTING.md) for build/test commands, workflow, and packaging. `./create_dmg.sh` creates `Better-VMAF.dmg`.
 
-1. Open Terminal and navigate to the project directory
-2. Run the build script:
-   ```bash
-   ./create_dmg.sh
-   ```
-3. The script will create `Better-VMAF.dmg` in the project directory
+## Development direction
 
-## How It Works
+The [BetterVMAF Linear project](https://linear.app/platinum-labs/project/bettervmaf-bb52721c0728) contains the implementation backlog, priorities, dependencies, and acceptance criteria.
 
-Better VMAF uses a self-contained FFmpeg binary with the libvmaf library to calculate video quality metrics. The app provides a simple interface for:
-1. Selecting a reference video (original/high quality)
-2. Selecting a comparison video (to be evaluated)
-3. Calculating and displaying VMAF scores
+- [Metric strategy and validation](docs/QUALITY_STRATEGY.md): current research and the proposed quality profile.
+- [Product direction](docs/PRODUCT_DIRECTION.md): existing alternatives and the intended comparison workflow.
+- [Repository audit](docs/REPOSITORY_AUDIT.md): verified code findings and development risks.
+- [Branch archive](docs/BRANCH_ARCHIVE.md): preserved legacy branch tips and restoration instructions.
+- [Agent guidance](AGENTS.md): project-specific engineering and UX rules.
 
-The VMAF score ranges from 0 to 100, where:
-- 100 represents perfect quality
-- Scores above 93 indicate excellent quality
-- Scores below 60 indicate significant quality issues
+## License and dependencies
 
-## License
+BetterVMAF's own source is [MIT licensed](LICENSE). Bundled third-party components retain their own licenses. The existing FFmpeg binary identifies GPL and version-3 build options; the app's MIT license does not replace those terms. Reproducible helper builds, notices, and corresponding-source provenance are tracked before the next release.
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- [FFmpeg](https://ffmpeg.org/) for video processing
-- [libvmaf](https://github.com/Netflix/vmaf) for VMAF calculation
-- Apple's SwiftUI framework for the user interface 
+Built with [SwiftUI](https://developer.apple.com/xcode/swiftui/), [FFmpeg](https://ffmpeg.org/), and [Netflix libvmaf](https://github.com/Netflix/vmaf).

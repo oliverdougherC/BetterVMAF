@@ -13,7 +13,6 @@ Temporary Items
 .apdisk
 
 # Xcode
-xcuserdata/
 **/xcuserdata/
 *.xcscmblueprint
 *.xccheckout
@@ -35,16 +34,9 @@ DerivedData/
 *.dSYM.zip
 *.dSYM
 *.xcuserstate
-*.xcworkspace
-!default.xcworkspace
 *.app
-*.xcodeproj/*
-!*.xcodeproj/project.pbxproj
-!*.xcodeproj/xcshareddata/
-!*.xcworkspace/contents.xcworkspacedata
 **/xcshareddata/WorkspaceSettings.xcsettings
 VMAF.xcodeproj/project.pbxproj.backup
-VMAF.xcodeproj/project.xcworkspace/xcuserdata/
 
 # Swift Package Manager
 .build/
@@ -55,8 +47,6 @@ VMAF.xcodeproj/project.xcworkspace/xcuserdata/
 
 # CocoaPods
 Pods/
-*.xcworkspace
-Podfile.lock
 
 # Carthage
 Carthage/Build/
@@ -82,10 +72,6 @@ fastlane/test_output
 *.swo
 *~
 
-# Build Scripts
-*.sh
-!create_dmg.sh
-
 # Temporary Files
 *.log
 *.tmp
@@ -95,11 +81,9 @@ fastlane/test_output
 *~
 *.orig
 *.rej
+temp_dmg/
 
 # Local environment
 .env
 .env.*
-
-
-DEVELOPMENT_PLAN.md
-VMAF.xcodeproj/project.xcworkspace/xcuserdata/ofhd.xcuserdatad/*
+!.env.example

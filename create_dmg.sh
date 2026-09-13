@@ -1,48 +1,59 @@
 #!/bin/bash
+set -euo pipefail
 
-# Exit on error
-set -e
-
-# Configuration
+# Create an unsigned local build. Public distribution still requires a separate
+# signing and notarization workflow.
+REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 APP_NAME="Better VMAF"
-DMG_NAME="${APP_NAME}.dmg"
-VOLUME_NAME="${APP_NAME}"
-TEMP_DIR="temp_dmg"
-BUILD_DIR="build/Release"
+DMG_NAME="Better-VMAF.dmg"
 
-# Clean up any previous build artifacts
-rm -rf "${BUILD_DIR}"
-rm -rf "${TEMP_DIR}"
-rm -f "${DMG_NAME}"
-
-# Build the app in Release configuration
-echo "Building ${APP_NAME}..."
-xcodebuild -project "VMAF.xcodeproj" -scheme "VMAF" -configuration Release clean build CONFIGURATION_BUILD_DIR="$(pwd)/${BUILD_DIR}"
-
-# Verify the app was built
-if [ ! -d "${BUILD_DIR}/${APP_NAME}.app" ]; then
-    echo "Error: App was not built successfully"
+if [[ "$(uname -s)" != "Darwin" ]]; then
+    echo "Error: DMG creation requires macOS and Xcode." >&2
     exit 1
 fi
 
-# Create temporary directory for DMG
-echo "Creating temporary directory for DMG..."
-mkdir -p "${TEMP_DIR}"
+for tool in xcodebuild hdiutil ditto; do
+    if ! command -v "${tool}" >/dev/null 2>&1; then
+        echo "Error: Required tool '${tool}' is unavailable." >&2
+        exit 1
+    fi
+done
 
-# Copy the app to the temporary directory
-echo "Copying app to temporary directory..."
-cp -R "${BUILD_DIR}/${APP_NAME}.app" "${TEMP_DIR}/"
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/better-vmaf-dmg.XXXXXX")"
+trap 'rm -rf -- "${WORK_DIR}"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
-# Create a symbolic link to Applications folder
-echo "Creating Applications folder link..."
-ln -s /Applications "${TEMP_DIR}/Applications"
+BUILD_DIR="${WORK_DIR}/build/Release"
+STAGING_DIR="${WORK_DIR}/staging"
 
-# Create the DMG
+echo "Building ${APP_NAME}..."
+xcodebuild \
+    -project "${REPO_ROOT}/VMAF.xcodeproj" \
+    -scheme VMAF \
+    -configuration Release \
+    -destination 'generic/platform=macOS' \
+    -derivedDataPath "${WORK_DIR}/DerivedData" \
+    "CONFIGURATION_BUILD_DIR=${BUILD_DIR}" \
+    CODE_SIGNING_ALLOWED=NO \
+    build
+
+if [[ ! -d "${BUILD_DIR}/${APP_NAME}.app" ]]; then
+    echo "Error: App was not built successfully." >&2
+    exit 1
+fi
+
+mkdir -p "${STAGING_DIR}"
+ditto "${BUILD_DIR}/${APP_NAME}.app" "${STAGING_DIR}/${APP_NAME}.app"
+ln -s /Applications "${STAGING_DIR}/Applications"
+
 echo "Creating DMG..."
-hdiutil create -volname "${VOLUME_NAME}" -srcfolder "${TEMP_DIR}" -ov -format UDZO "${DMG_NAME}"
+hdiutil create \
+    -volname "${APP_NAME}" \
+    -srcfolder "${STAGING_DIR}" \
+    -format UDZO \
+    "${WORK_DIR}/${DMG_NAME}"
 
-# Clean up
-echo "Cleaning up..."
-rm -rf "${TEMP_DIR}"
-
-echo "DMG creation complete! Output: ${DMG_NAME}" 
+# Replace the previous output only after both the build and packaging succeed.
+mv -f "${WORK_DIR}/${DMG_NAME}" "${REPO_ROOT}/${DMG_NAME}"
+echo "DMG creation complete: ${REPO_ROOT}/${DMG_NAME}"

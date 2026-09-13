@@ -1,0 +1,99 @@
+name: Archive legacy branches
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/archive-legacy-branches.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archive-legacy-branches
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    if: github.repository == 'oliverdougherC/BetterVMAF' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Preserve reviewed tips and remove only the two legacy branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          repo = os.environ['GH_REPO']
+          expected = {
+              'nano': 'a54900b67584c8cfd805fbbd4b10e0081232570d',
+              'test': '3419928342353a047e5c76a219698003748ab39f',
+          }
+
+          def api(method, path, payload=None, missing_ok=False):
+              data = None if payload is None else json.dumps(payload).encode()
+              request = urllib.request.Request(
+                  f'https://api.github.com/repos/{repo}/{path}', data=data, method=method,
+                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                           'Accept': 'application/vnd.github+json',
+                           'X-GitHub-Api-Version': '2022-11-28',
+                           'Content-Type': 'application/json'})
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      body = response.read()
+                      return json.loads(body) if body else None
+              except urllib.error.HTTPError as error:
+                  if missing_ok and error.code == 404:
+                      return None
+                  raise
+
+          # Validate every branch and tag before changing any refs.
+          for branch, sha in expected.items():
+              for kind, name in [('heads', branch), ('tags', f'archive/{branch}-2026-09-13')]:
+                  ref = api('GET', f'git/ref/{kind}/{name}', missing_ok=True)
+                  if ref is not None and ref['object']['sha'] != sha:
+                      raise RuntimeError(f'{kind}/{name} moved; refusing cleanup')
+
+          # Both commits must be durably reachable before either branch is removed.
+          for branch, sha in expected.items():
+              tag = f'archive/{branch}-2026-09-13'
+              if api('GET', f'git/ref/tags/{tag}', missing_ok=True) is None:
+                  api('POST', 'git/refs', {'ref': f'refs/tags/{tag}', 'sha': sha})
+              if api('GET', f'git/ref/tags/{tag}')['object']['sha'] != sha:
+                  raise RuntimeError(f'{tag} verification failed; refusing deletion')
+
+          # Git's force-with-lease performs an atomic expected-tip check when deleting.
+          # A branch changed by another contributor is preserved, even after preflight.
+          import base64
+          import subprocess
+          import tempfile
+          authorization = base64.b64encode(('x-access-token:' + os.environ['GH_TOKEN']).encode()).decode()
+          print(f'::add-mask::{authorization}', flush=True)
+          git_env = dict(os.environ, GIT_CONFIG_COUNT='1',
+                         GIT_CONFIG_KEY_0='http.https://github.com/.extraheader',
+                         GIT_CONFIG_VALUE_0='AUTHORIZATION: basic ' + authorization)
+          with tempfile.TemporaryDirectory() as directory:
+              subprocess.run(['git', 'init', '--bare', directory], check=True, stdout=subprocess.DEVNULL)
+              for branch, sha in expected.items():
+                  ref = api('GET', f'git/ref/heads/{branch}', missing_ok=True)
+                  if ref is None:
+                      print(f'{branch}: already absent; archive verified')
+                      continue
+                  if ref['object']['sha'] != sha:
+                      raise RuntimeError(f'{branch} moved; refusing deletion')
+                  subprocess.run(['git', '-C', directory, 'push',
+                                  f'--force-with-lease=refs/heads/{branch}:{sha}',
+                                  f'https://github.com/{repo}.git', f':refs/heads/{branch}'],
+                                 env=git_env, check=True)
+                  if api('GET', f'git/ref/heads/{branch}', missing_ok=True) is not None:
+                      raise RuntimeError(f'{branch} is still present after deletion')
+                  print(f'{branch}: archived and deleted')
+          PY

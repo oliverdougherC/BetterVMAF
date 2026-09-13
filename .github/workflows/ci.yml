@@ -1,0 +1,76 @@
+name: macOS CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and test (macOS 15, Xcode 16.4)
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Report toolchain
+        run: |
+          xcodebuild -version
+          sw_vers
+          uname -m
+
+      - name: Check project and packaging syntax
+        run: |
+          plutil -lint VMAF.xcodeproj/project.pbxproj
+          bash -n create_dmg.sh
+          xcodebuild -list -project VMAF.xcodeproj
+
+      - name: Build Release without signing credentials
+        run: |
+          xcodebuild \
+            -project VMAF.xcodeproj \
+            -scheme VMAF \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      # These currently exercise the Xcode template and app launch only.
+      # Passing CI does not establish metric or comparison correctness.
+      - name: Run unit and UI tests
+        run: |
+          xcodebuild \
+            -project VMAF.xcodeproj \
+            -scheme VMAF \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData \
+            -resultBundlePath build/TestResults.xcresult \
+            -parallel-testing-enabled NO \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM= \
+            test
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: macOS-test-results
+          path: build/TestResults.xcresult
+          if-no-files-found: ignore
+          retention-days: 14
