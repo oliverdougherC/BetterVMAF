@@ -10,8 +10,8 @@ final class VMAFUITests: XCTestCase {
         let analyze = app.buttons["analyzeComparison"]
         XCTAssertTrue(analyze.waitForExistence(timeout: 5))
         XCTAssertFalse(analyze.isEnabled)
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Source · original")).firstMatch.exists)
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Encode · comparison")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Source · original")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Encode · comparison")).firstMatch.exists)
         let assumptions = app.disclosureTriangles["Viewing assumptions"]
         XCTAssertTrue(assumptions.exists)
         assumptions.click()
@@ -29,7 +29,7 @@ final class VMAFUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Add encodes…"].waitForExistence(timeout: 2))
         XCTAssertFalse(app.buttons["Start pending"].isEnabled)
         XCTAssertFalse(app.buttons["Clear"].isEnabled)
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "1,000,000 retained frame samples")).firstMatch.exists)
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Shared source")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "1,000,000 retained frame samples")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Shared source")).firstMatch.exists)
     }
 }
