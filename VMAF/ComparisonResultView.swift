@@ -65,7 +65,7 @@ struct ComparisonResultView: View {
                     Text("\(definition.direction == "lower" ? "Lower values indicate less measured banding." : "Higher values indicate greater measured source fidelity.") Nonfinite and unavailable values remain in the record and are omitted from the numeric line.").font(.caption).foregroundStyle(.secondary)
                 }
             }
-            DisclosureGroup("Measurements and viewing assumptions") {
+            ReviewDisclosure("Measurements and viewing assumptions") {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Metrics retain their own scales and directions. Supplementary duration-weighted distributions are separate from upstream pooling.").font(.caption).foregroundStyle(.secondary)
                     if let analysis = result.analysis {
@@ -86,7 +86,7 @@ struct ComparisonResultView: View {
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, 10)
             }
-            DisclosureGroup("Reproducibility record") {
+            ReviewDisclosure("Reproducibility record") {
                 ScrollView { Text(provenance).font(.system(.caption, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(height: 200)
             }
         }

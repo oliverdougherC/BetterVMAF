@@ -9,7 +9,6 @@ struct ContentView: View {
             VMAFBatchView().tabItem { Label("Batch", systemImage: "tray.full") }
         }
         .frame(minWidth: 760, minHeight: 600)
-        .disclosureGroupStyle(ReviewDisclosureStyle())
     }
 }
 
@@ -23,7 +22,7 @@ struct VMAFView: View {
                 Text("Compare your encode").font(.largeTitle.bold())
                 Text("Choose the original source and an encode, then inspect what changed.")
                     .foregroundStyle(.secondary)
-                DisclosureGroup("Source, encode and viewing profile", isExpanded: $setupExpanded) {
+                ReviewDisclosure("Source, encode and viewing profile", isExpanded: $setupExpanded) {
                 HStack(alignment: .top) {
                     VideoInputCard(title: "Source · original", url: session.source, disabled: session.isBusy) {
                         session.select($0, source: true)
@@ -32,7 +31,7 @@ struct VMAFView: View {
                         session.select($0, source: false)
                     }
                 }
-                DisclosureGroup("Viewing assumptions") {
+                ReviewDisclosure("Viewing assumptions") {
                     Picker("Viewing profile", selection: Binding(get: { session.configuration.viewingProfile }, set: { session.selectProfile($0) })) {
                         ForEach(AnalysisConfiguration.ViewingProfile.allCases, id: \.self) { Text($0.label).tag($0) }
                     }.disabled(session.isBusy).accessibilityIdentifier("viewingProfilePicker")

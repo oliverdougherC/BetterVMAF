@@ -12,7 +12,7 @@ struct VMAFBatchView: View {
                 VideoInputCard(title: "Shared source · original", url: session.source, disabled: session.isBusy) { url in
                     selectedID = nil; session.selectSource(url)
                 }
-                DisclosureGroup("Viewing assumptions for this queue") {
+                ReviewDisclosure("Viewing assumptions for this queue") {
                     Picker("Viewing profile", selection: Binding(get: { session.configuration.viewingProfile }, set: { selectedID = nil; session.selectProfile($0) })) {
                         ForEach(AnalysisConfiguration.ViewingProfile.allCases, id: \.self) { Text($0.label).tag($0) }
                     }.disabled(session.isBusy)
