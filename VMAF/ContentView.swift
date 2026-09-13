@@ -34,7 +34,7 @@ struct VMAFView: View {
                 DisclosureGroup("Viewing assumptions") {
                     Picker("Viewing profile", selection: Binding(get: { session.configuration.viewingProfile }, set: { session.selectProfile($0) })) {
                         ForEach(AnalysisConfiguration.ViewingProfile.allCases, id: \.self) { Text($0.label).tag($0) }
-                    }.disabled(session.isBusy)
+                    }.disabled(session.isBusy).accessibilityIdentifier("viewingProfilePicker")
                     Text("SDR, equal canvas, strict matched timestamps. The profile describes the model's viewing assumptions.").font(.caption).foregroundStyle(.secondary)
                 }
                 }

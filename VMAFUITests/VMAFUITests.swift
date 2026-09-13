@@ -15,7 +15,7 @@ final class VMAFUITests: XCTestCase {
         let assumptions = app.disclosureTriangles["Viewing assumptions"]
         XCTAssertTrue(assumptions.exists)
         assumptions.click()
-        XCTAssertTrue(app.popUpButtons["Viewing profile"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "viewingProfilePicker").firstMatch.waitForExistence(timeout: 2), app.debugDescription)
         XCTAssertFalse(analyze.isEnabled)
     }
 
@@ -32,6 +32,6 @@ final class VMAFUITests: XCTestCase {
         let limits = app.descendants(matching: .any).matching(identifier: "batchResourceLimits").firstMatch
         XCTAssertTrue(limits.exists, app.debugDescription)
         XCTAssertTrue((limits.value as? String)?.contains("1,000,000 retained frame samples") == true, app.debugDescription)
-        XCTAssertTrue(app.buttons["choose-Shared source"].isHittable, app.debugDescription)
+        XCTAssertTrue(app.buttons["choose-Shared source · original"].isHittable, app.debugDescription)
     }
 }
