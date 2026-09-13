@@ -1,4 +1,6 @@
-# BetterVMAF source audit
+# BetterVMAF historical source audit
+
+This document preserves the foundation audit as historical evidence. The current implementation addresses these findings; see [VALIDATION.md](VALIDATION.md) for the issue-by-issue status, native results and remaining limitations. Environment statements below describe the original audit, not the Apple Silicon integration session.
 
 Audited baseline main `209921cd525e4331b361bf78c428787fe3e6f946` on 2026-09-13. File/line references below describe that commit. This is a source audit, not a claim of macOS runtime acceptance. The accompanying foundation cleanup adds shared build/test configuration, removes tracked user state, improves packaging, and corrects documentation. Application behavior findings below remain planned repairs in Linear. The environment is Linux, has no Swift/Xcode, and its system FFmpeg lacks libvmaf. Findings below are source-traced; portable FFmpeg parser/progress checks and binary inspection were actually executed where stated.
 

@@ -1,0 +1,19 @@
+{
+  "b_frames": true,
+  "duration_seconds": 12,
+  "fps": 60,
+  "frames": 720,
+  "key_interval": 240,
+  "keyframe_indices": [
+    0,
+    237,
+    474,
+    711
+  ],
+  "live_matched_output_samples": 12,
+  "main_actor_gap_max_ms": 11.162249997141771,
+  "main_actor_gap_p95_ms": 11.080541662522592,
+  "main_actor_heartbeat_samples": 617,
+  "scope": "main-actor scheduling during exact seeks, native analysis and full JSON export; not compositor frame pacing",
+  "source_sha256": "3644e993252931f1680d795d4aa892d12a7da481c43b928545f07eee41ad2c07"
+}

@@ -1,0 +1,69 @@
+{
+  "hardware": "Apple M4 Pro, 24 GiB",
+  "os": "macOS 27.0",
+  "tool": "Codex native CUA",
+  "build": "Debug integration, native corrections verified; see native-gop-playback.json for expanded automation",
+  "checks": [
+    {
+      "case": "tagged AVC 24fps known black interval",
+      "source": "review_reference.mp4",
+      "encode": "review_sustained.mp4",
+      "observed": {
+        "frames": 48,
+        "vmaf_mean": 75,
+        "xpsnr_minimum_native_plane": 5.582,
+        "selected_interval": [
+          1,
+          1.5
+        ],
+        "selected_frame": 24,
+        "burn_in_verified": true
+      }
+    },
+    {
+      "case": "previous frame from24",
+      "before_fix": {
+        "label": 23,
+        "both_visible_burn_ins": 22
+      },
+      "after_rational_pts_fix": {
+        "label": 23,
+        "both_visible_burn_ins": 23,
+        "timestamp": 0.958333
+      },
+      "result": "pass after correction"
+    },
+    {
+      "case": "source selection change",
+      "result": "old results immediately removed"
+    },
+    {
+      "case": "wipe and1:1",
+      "result": "functional; fixed overlay side labels added after first inspection"
+    },
+    {
+      "case": "4K60 4sec AVC",
+      "observed": {
+        "frames": 240,
+        "model": "vmaf_v1.0.16_hfr_3d0h",
+        "vmaf_mean": 78.36,
+        "xpsnr_minimum_native_plane": 38.071,
+        "savings_percent": 96.2
+      },
+      "play_loop": "native controls respond; capture alone does not establish long-run alignment"
+    },
+    {
+      "case": "sandbox PDF save",
+      "result": "fixed .itemReplacementDirectory; native Save-panel create and overwrite passed",
+      "pdf": "/tmp/bettervmaf-performance/ui-workload/BetterVMAF-ui-save-qa.pdf",
+      "json": "/tmp/bettervmaf-performance/ui-workload/BetterVMAF-ui-save-qa.json",
+      "json_schema": 1,
+      "json_samples": 48
+    }
+  ],
+  "limitations": [
+    "Screenshots inspected in task transcript; these observations are not human subjective calibration.",
+    "Instruments recording did not start; no frame-pacing claim from stalled trace.",
+    "Final packaged app and latest changes must be verified separately."
+  ]
+}

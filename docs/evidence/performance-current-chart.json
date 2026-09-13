@@ -1,0 +1,33 @@
+{
+  "optimizer_sink": 22276056.42330042,
+  "rows": [
+    {
+      "both_adjacent_opposite_spikes_retained": true,
+      "bucket_count": 500,
+      "envelope_median_seconds": 0.000920708,
+      "envelope_p95_seconds": 0.00107275,
+      "maximum_points": 1002,
+      "nearest_mean_seconds": 5.738791e-08,
+      "note": "Optimized actual TimelineData implementation; no SwiftUI rendering or frame-pacing claim. RSS cumulative process peak.",
+      "peak_process_rss_bytes": 12976128,
+      "plotted_points": 1002,
+      "raw_point_storage_bytes": 6912000,
+      "raw_points": 216000
+    },
+    {
+      "both_adjacent_opposite_spikes_retained": true,
+      "bucket_count": 500,
+      "envelope_median_seconds": 0.002869083,
+      "envelope_p95_seconds": 0.00341375,
+      "maximum_points": 1002,
+      "nearest_mean_seconds": 4.922792e-08,
+      "note": "Optimized actual TimelineData implementation; no SwiftUI rendering or frame-pacing claim. RSS cumulative process peak.",
+      "peak_process_rss_bytes": 45039616,
+      "plotted_points": 1002,
+      "raw_point_storage_bytes": 32000000,
+      "raw_points": 1000000
+    }
+  ],
+  "source_sha256": "0c24dd66ed983f233455d0903e94474ffc207f357b87465c4f14cb2be4d03d40",
+  "hardware": "Apple M4 Pro 24 GiB; macOS27.0"
+}

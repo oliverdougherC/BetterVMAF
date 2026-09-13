@@ -1,0 +1,51 @@
+{
+  "command": "python3 scripts/engine/build.py",
+  "exitCode": 0,
+  "nativeArchitecture": "arm64",
+  "upstreamSourceChanges": false,
+  "repeatedRecipeBinaryHashesUnchanged": true,
+  "sources": {
+    "dav1d": {
+      "license": "BSD-2-Clause",
+      "repository": "https://code.videolan.org/videolan/dav1d.git",
+      "revision": "b546257f770768b2c88258c533da38b91a06f737",
+      "sourceArchive": "dav1d-b546257f770768b2c88258c533da38b91a06f737.tar",
+      "sourceArchiveSHA256": "f08da2a2edd99a5819e42b97e2f8c4f54bf5b3082e2dc4abb67f48bf55dee50d",
+      "version": "1.5.3"
+    },
+    "ffmpeg": {
+      "license": "LGPL-2.1-or-later",
+      "repository": "https://github.com/FFmpeg/FFmpeg.git",
+      "revision": "9047fa1b084f76b1b4d065af2d743df1b40dfb56",
+      "sourceArchive": "ffmpeg-9047fa1b084f76b1b4d065af2d743df1b40dfb56.tar",
+      "sourceArchiveSHA256": "44197db44fa085441f1717d12770e606ec074de3c2879a93dd03ca07ac97054b",
+      "version": "8.1"
+    },
+    "vmaf": {
+      "license": "BSD-2-Clause-Patent",
+      "repository": "https://github.com/Netflix/vmaf.git",
+      "revision": "f85a853692a8c730d0270cd733c8bb30b5b93b7c",
+      "sourceArchive": "vmaf-f85a853692a8c730d0270cd733c8bb30b5b93b7c.tar",
+      "sourceArchiveSHA256": "174257cfc9b61dba991cb5208cabcb34f629a280c6c66a93f2d411a6b79d83a5",
+      "version": "3.2.0+f85a853"
+    }
+  },
+  "helpers": {
+    "ffmpeg": {
+      "bytes": 23128832,
+      "sha256": "3581cfbde33eca27d5ceca86cc2c847aca7936266a76a3f5a7b29607abb4c529"
+    },
+    "ffprobe": {
+      "bytes": 22954528,
+      "sha256": "4474bd44e4e380b81e5ad862d94bfb7a5a0a8a9d9880c384c152a68ea4e5d523"
+    },
+    "vmaf": {
+      "bytes": 1064880,
+      "sha256": "c78671a4473f3fb33b3cc04c0877dda73090a1bab8ed1ce1deb65979bd20b761"
+    }
+  },
+  "verificationCommand": "python3 scripts/engine/verify.py --report docs/evidence/engine-native-verification.json",
+  "verificationExitCode": 0,
+  "upstreamTestPassCount": 22,
+  "upstreamTestFailureCount": 0
+}

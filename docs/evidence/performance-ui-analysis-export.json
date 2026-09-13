@@ -1,0 +1,31 @@
+{
+  "requested_utc": "2026-09-13T02:28:13.912129+00:00",
+  "argv": [
+    "xcrun",
+    "xctrace",
+    "record",
+    "--template",
+    "Animation Hitches",
+    "--attach",
+    "88556",
+    "--time-limit",
+    "60s",
+    "--output",
+    "/tmp/bettervmaf-performance/traces/analysis-export.trace",
+    "--no-prompt"
+  ],
+  "status": 1,
+  "stdout": "Starting recording with the Animation Hitches template. Attaching to: Better VMAF (88556). Time limit: 60.0 s\nCtrl-C to stop the recording\nReached specified time limit, ending recording...\nStopping recording...\n",
+  "stderr": "",
+  "trace_path": "/tmp/bettervmaf-performance/traces/analysis-export.trace",
+  "note": "Capture does not create or drive workload. Record the exact human/automation interactions and interval separately; no idle trace is responsiveness evidence.",
+  "diagnosis": {
+    "observed_failure": "Recorder printed time-limit reached and Stopping recording, but did not finalize for nearly four minutes. SIGINT did not finish; SIGTERM ended the recorder. Application was not terminated.",
+    "sample_stack": "DTXConnectionServices semaphore wait on com.apple.dt.tap; root cause not established.",
+    "partial_trace_bytes": 40960,
+    "partial_trace_contents": "Trace1.run/RunIssues.storedata only; no complete template or exported frame samples.",
+    "toc_export_status": 10,
+    "toc_export_error": "Export failed: Document Missing Template Error",
+    "conclusion": "No usable frame-pacing measurement obtained. External Instruments recording/finalization failure, not evidence of an application hitch or successful responsiveness."
+  }
+}

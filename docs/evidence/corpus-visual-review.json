@@ -1,0 +1,39 @@
+{
+  "seed": 531,
+  "rows": [
+    {
+      "row": "A",
+      "left": "motion24",
+      "right": "identity",
+      "pts": 0.75
+    },
+    {
+      "row": "B",
+      "left": "motion24",
+      "right": "oversharpen",
+      "pts": 0.75
+    },
+    {
+      "row": "C",
+      "left": "uv_corrupt",
+      "right": "motion24",
+      "pts": 0.75
+    },
+    {
+      "row": "D",
+      "left": "gamma",
+      "right": "motion24",
+      "pts": 0.75
+    }
+  ],
+  "sha256": "bc359bdfebb28ec0da010dc1ab60961ca3b0acc7dbbd273ff3743c1db5e23a73",
+  "reviewer": "Codex visual inspection, not human subjective labels",
+  "observations_before_key": {
+    "A": "No visible difference in displayed frame.",
+    "B": "Right image has stronger bright/dark outlines at color boundaries and small squares.",
+    "C": "Left image has severe blue/cyan color replacement; right retains multicolor bars.",
+    "D": "Subtle brightness differences, especially diagonal strip; no universal preference inferred."
+  },
+  "source_selection": "All8 final public excerpts inspected; first two Tears scenes show live-action skin and foliage, others show dark rigging/detail and detailed synthetic object. Initial teaser title-card cuts rejected and replaced with0/2/16/22sec cuts. BBB includes foliage/fur, character, multiple characters and branch/depth.",
+  "limitations": "Single frame per pair, sampled preview conversion. Useful for corruption and scene selection; not a temporal or calibrated human perceptual study. Actual motion UI task is recorded separately in ALTERNATIVE_COMPARISON.md."
+}

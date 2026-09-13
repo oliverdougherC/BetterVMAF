@@ -1,53 +1,51 @@
 # BetterVMAF
 
-A free native macOS app for comparing an encoded video against its source.
+A free, local, native macOS app for comparing an encode with its source: see the space saved, inspect named quality measurements, and jump to the video intervals they identify.
 
-BetterVMAF currently calculates **VMAF v0.6.1** with bundled FFmpeg and displays summary statistics and per-frame charts. The next development phase expands that into a complementary quality profile, synchronized visual inspection, and clearer evidence of what an encode changed.
+The **2.0 review branch** adds Standard SDR analysis with **VMAF v1.0.16, XPSNR, and source-aware CAMBI**, using a pinned native Apple Silicon engine. This is an unmerged review build; existing GitHub releases describe earlier versions.
 
-## Available today
+## Compare and inspect
 
-- SwiftUI interface for one comparison or a queue of encodes against one reference.
-- VMAF mean, minimum, maximum, harmonic mean, and frame-level graphs.
-- Bundled legacy 1080p and 4K VMAF models with automatic selection.
-- CSV, JSON, and PDF export.
-- Progress and diagnostic output from FFmpeg.
+1. Choose or drop the original source and encode. Viewing assumptions are available before analysis.
+2. Analyze the full matched video. Cancellation stops and reaps the owned engine process.
+3. Select a moment to seek both videos to its frame pair. Use side-by-side or wipe, shared zoom/pan, 1:1 inspection, frame stepping and interval looping.
+4. Export a short PDF, per-frame CSV, or a versioned JSON record with identities, original timestamps, model hashes and preprocessing.
 
-The current “heat map” is a colored score chart over time, not a spatial map of pixel damage. Multi-metric analysis and synchronized source/encode playback are planned capabilities.
+VMAF is a model estimate, **not a percentage of retained quality or proof of transparency**. XPSNR retains its own dB scale and native plane aggregation. CAMBI includes source banding and its full-reference difference; VMAF v1 already uses CAMBI internally, so the diagnostic is not another independent vote. Review intervals use supplementary duration-weighted tails, preserve disagreements, and lead to exact video evidence. File-size and container-bitrate savings are separate measurements.
 
-## Install
+Only one complete analysis runs at a time across app windows; waiting jobs can be cancelled. Batch mode compares a source against up to eight encodes, with stable job identities, cancellation and retry. Profiles and coverage must agree before results are compared. Resources are bounded; the current queue retains at most one million measured frame samples, and each analysis accepts at most 500,000 decoded frames. Larger work must be divided into documented matching intervals. The queue is an in-session workflow, not persistent scheduling.
 
-Download a DMG from [GitHub Releases](https://github.com/oliverdougherC/BetterVMAF/releases) and drag **Better VMAF** into Applications. Existing releases are not Developer ID signed; macOS may require opening the app through **System Settings → Privacy & Security**.
+## Supported comparison boundary
 
-The current source project targets **macOS 15.2 or later**. Older release assets may differ. The checked-in FFmpeg executable is **Intel x86_64**, so its execution on Apple Silicon currently requires Rosetta. A native Apple Silicon engine is a high-priority roadmap item.
+- Apple Silicon; project minimum macOS **15.2**. Native host evidence and CI versions are recorded in [validation](docs/VALIDATION.md).
+- Explicitly tagged **BT.709 SDR**, full or limited range, 8/10-bit 4:2:0, left/center chroma location, progressive square pixels and one unambiguous video stream.
+- Equal coded dimensions, zero rotation, matched decoded presentation timestamps and frame durations. Container timestamp quantization is checked within a bounded one-to-one correspondence policy. A conservative content screen refuses strong nearby displacement evidence; it cannot prove semantic identity for all scenes.
+- Original precision, dimensions, metadata and transforms remain in every result. Missing metadata, unexplained edits/cadence changes, HDR, interlace and unsupported geometry produce actionable refusals.
+- Playback uses AVFoundation and its display color management. Some FFmpeg-readable formats, including FFV1/Matroska combinations, cannot play natively. The result remains available with an explicit viewer error; no substitute video is silently shown.
 
-## Understand the result
+Scaling/rotation normalization, native HDR quality, SSIMULACRA2 Deep mode and Quick sampling are **not enabled**. See [experiments](docs/EXPERIMENTS.md) for measured decisions and remaining gates. Intel helpers are not included in this review package; existing release history and archive tags are preserved.
 
-VMAF predicts perceived quality relative to a reference under a model's assumptions. **A score is not a percentage of retained quality, and 100 is not proof of identical pixels or invisible degradation.** Scores depend on the model, viewing assumptions, input correspondence, and preprocessing. Inspect the video when making an encoding decision.
-
-Current limitations include a 30 fps assumption in displayed timestamps, incomplete alignment/color validation, and a batch cancellation race. See the [source audit](docs/REPOSITORY_AUDIT.md) for evidence and the development backlog for planned repairs.
-
-## Develop
+## Build and review locally
 
 ```bash
-git clone https://github.com/oliverdougherC/BetterVMAF.git
-cd BetterVMAF
-open VMAF.xcodeproj
+xcodebuild -project VMAF.xcodeproj -scheme VMAF -configuration Release \
+  -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build
+./create_dmg.sh
 ```
 
-Use the shared **VMAF** scheme. See [CONTRIBUTING.md](CONTRIBUTING.md) for build/test commands, workflow, and packaging. `./create_dmg.sh` creates `Better-VMAF.dmg`.
+No Homebrew or Rosetta runtime is required for the bundled engine, and no paid Apple developer account is needed for local development. Packages use ad-hoc signing, not Developer ID signing/notarization. The DMG includes dependency notices, a verified corresponding-source archive, and checksum/provenance sidecars. Read [CONTRIBUTING.md](CONTRIBUTING.md) for native tests and packaging commands.
 
-## Development direction
+## Evidence and development
 
-The [BetterVMAF Linear project](https://linear.app/platinum-labs/project/bettervmaf-bb52721c0728) contains the implementation backlog, priorities, dependencies, and acceptance criteria.
+- [Validation and issue mapping](docs/VALIDATION.md)
+- [Architecture and comparison contract](docs/ARCHITECTURE.md)
+- [Engine source/build/model provenance](docs/ENGINE.md)
+- [Reproducible corpus](docs/CORPUS.md)
+- [Measured Mac performance](docs/PERFORMANCE.md)
+- [Product workflow](docs/WORKFLOW.md) and [alternative comparison](docs/ALTERNATIVE_COMPARISON.md)
+- [Quality strategy](docs/QUALITY_STRATEGY.md), [historical source audit](docs/REPOSITORY_AUDIT.md), [archived branches](docs/BRANCH_ARCHIVE.md)
+- [Existing Linear project](https://linear.app/platinum-labs/project/bettervmaf-bb52721c0728)
 
-- [Metric strategy and validation](docs/QUALITY_STRATEGY.md): current research and the proposed quality profile.
-- [Product direction](docs/PRODUCT_DIRECTION.md): existing alternatives and the intended comparison workflow.
-- [Repository audit](docs/REPOSITORY_AUDIT.md): verified code findings and development risks.
-- [Branch archive](docs/BRANCH_ARCHIVE.md): preserved legacy branch tips and restoration instructions.
-- [Agent guidance](AGENTS.md): project-specific engineering and UX rules.
+## License
 
-## License and dependencies
-
-BetterVMAF's own source is [MIT licensed](LICENSE). Bundled third-party components retain their own licenses. The existing FFmpeg binary identifies GPL and version-3 build options; the app's MIT license does not replace those terms. Reproducible helper builds, notices, and corresponding-source provenance are tracked before the next release.
-
-Built with [SwiftUI](https://developer.apple.com/xcode/swiftui/), [FFmpeg](https://ffmpeg.org/), and [Netflix libvmaf](https://github.com/Netflix/vmaf).
+BetterVMAF source is [MIT licensed](LICENSE). Bundled FFmpeg, libvmaf, dav1d, libsvm and model resources retain their own licenses and notices; the app's license does not replace them. Exact components, license texts, source revisions and build configuration are in [engine provenance](docs/ENGINE.md) and the package.

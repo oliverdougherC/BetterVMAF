@@ -1,0 +1,30 @@
+{
+  "baseline_commit" : "78f6631605132d0ea75cf92869e65231968d46fb",
+  "optimizer_sink" : 634282.66666666593,
+  "rows" : [
+    {
+      "combined_marks" : 4968000,
+      "construction_seconds" : 0.00081098079681396484,
+      "extrapolated_heatmap_min_max_seconds" : 57.0240318775177,
+      "heatmap_marks" : 2376000,
+      "main_chart_marks" : 2592000,
+      "measured_linear_hover_seconds" : 0.00040434300899505615,
+      "measured_per_point_min_max_seconds" : 0.00026400014758110046,
+      "note" : "Release-optimized Foundation microbenchmark on main thread; mark counts static; full chart was not rendered; extrapolation is not observed UI time.",
+      "point_storage_bytes" : 3456000,
+      "raw_points" : 216000
+    },
+    {
+      "combined_marks" : 23000000,
+      "construction_seconds" : 0.0037940740585327148,
+      "extrapolated_heatmap_min_max_seconds" : 1181.1554431915283,
+      "heatmap_marks" : 11000000,
+      "main_chart_marks" : 12000000,
+      "measured_linear_hover_seconds" : 0.0019359998404979706,
+      "measured_per_point_min_max_seconds" : 0.0011811554431915283,
+      "note" : "Release-optimized Foundation microbenchmark on main thread; mark counts static; full chart was not rendered; extrapolation is not observed UI time.",
+      "point_storage_bytes" : 16000000,
+      "raw_points" : 1000000
+    }
+  ]
+}

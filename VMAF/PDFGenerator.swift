@@ -1,225 +1,118 @@
 import Foundation
-import PDFKit
-import SwiftUI
-import AppKit
+import CoreGraphics
+import CoreText
 
-class PDFGenerator {
-    struct VideoInfo {
-        let referenceVideo: URL
-        let comparisonVideo: URL
-    }
-    
-    static func generateReport(result: VMAFCalculator.VMAFResult, videoInfo: VideoInfo, includeGraphs: Bool, includeFrameData: Bool) -> Data {
-        // Create PDF document
-        let pdfDocument = PDFDocument()
-        let pageSize = NSSize(width: 612, height: 792)  // 8.5x11 inches at 72 DPI
-        
-        // Create first page with content
-        let firstPage = PDFPage()
-        let firstPageBounds = CGRect(origin: .zero, size: pageSize)
-        firstPage.setBounds(firstPageBounds, for: .mediaBox)
-        
-        // Create bitmap context for drawing
-        let bitmapRep = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: Int(pageSize.width),
-            pixelsHigh: Int(pageSize.height),
-            bitsPerSample: 8,
-            samplesPerPixel: 4,
-            hasAlpha: true,
-            isPlanar: false,
-            colorSpaceName: .calibratedRGB,
-            bytesPerRow: 0,
-            bitsPerPixel: 0
-        )!
-        
-        let context = NSGraphicsContext(bitmapImageRep: bitmapRep)!
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = context
-        
-        var yPosition: CGFloat = pageSize.height - 36
-        
-        // Draw title
-        let titleFont = NSFont.boldSystemFont(ofSize: 18)
-        let headerFont = NSFont.boldSystemFont(ofSize: 14)
-        let bodyFont = NSFont.systemFont(ofSize: 12)
-        
-        drawText("VMAF Analysis Report", at: NSPoint(x: 36, y: yPosition), font: titleFont)
-        yPosition -= 36
-        
-        // Draw video information
-        drawText("Reference Video:", at: NSPoint(x: 36, y: yPosition), font: headerFont)
-        yPosition -= 24
-        drawText(videoInfo.referenceVideo.lastPathComponent, at: NSPoint(x: 48, y: yPosition), font: bodyFont)
-        yPosition -= 24
-        
-        drawText("Comparison Video:", at: NSPoint(x: 36, y: yPosition), font: headerFont)
-        yPosition -= 24
-        drawText(videoInfo.comparisonVideo.lastPathComponent, at: NSPoint(x: 48, y: yPosition), font: bodyFont)
-        yPosition -= 36
-        
-        // Draw summary results
-        drawText("Summary Results", at: NSPoint(x: 36, y: yPosition), font: headerFont)
-        yPosition -= 24
-        
-        let summaryData = [
-            ("Overall VMAF Score:", String(format: "%.2f", result.score)),
-            ("Score Range:", String(format: "%.2f - %.2f", result.minScore, result.maxScore)),
-            ("Harmonic Mean:", String(format: "%.2f", result.harmonicMean))
-        ]
-        
-        for (label, value) in summaryData {
-            drawText(label, at: NSPoint(x: 48, y: yPosition), font: bodyFont)
-            drawText(value, at: NSPoint(x: 200, y: yPosition), font: bodyFont)
-            yPosition -= 24
+/// Vector PDF drawing stays off the main actor and never instantiates a SwiftUI view.
+enum PDFGenerator {
+    static let maximumDetailedFrames = 500
+    static func generateReport(result: VMAFCalculator.VMAFResult, options: ExportManager.ExportOptions) throws -> Data {
+        guard let analysis = result.analysis else { throw AnalysisError.invalid("The result has no reproducible analysis provenance.") }
+        if options.includeFrameData && analysis.samples.count > maximumDetailedFrames {
+            throw AnalysisError.invalid("Detailed PDF is limited to \(maximumDetailedFrames) frames. Turn off every-frame data or choose CSV/JSON.")
         }
-        yPosition -= 12
-        
-        // Draw graphs
-        if includeGraphs {
-            drawText("Visualization", at: NSPoint(x: 36, y: yPosition), font: headerFont)
-            yPosition -= 36
-            
-            // Line graph
-            if let graphImage = renderViewToImage(VMAFGraphView(frameMetrics: result.frameMetrics)
-                .frame(width: pageSize.width - 72, height: 200)) {
-                graphImage.draw(in: NSRect(x: 36, y: yPosition - 200,
-                                         width: pageSize.width - 72, height: 200))
-                yPosition -= 224
-            }
-            
-            // Heat map
-            if let heatMapImage = renderViewToImage(HeatMapView(frameMetrics: result.frameMetrics)
-                .frame(width: pageSize.width - 72, height: 200)) {
-                heatMapImage.draw(in: NSRect(x: 36, y: yPosition - 200,
-                                           width: pageSize.width - 72, height: 200))
-                yPosition -= 224
+        let data = NSMutableData()
+        guard let consumer = CGDataConsumer(data: data) else { throw AnalysisError.invalid("Cannot create PDF output.") }
+        var box = CGRect(x: 0, y: 0, width: 612, height: 792)
+        guard let context = CGContext(consumer: consumer, mediaBox: &box, nil) else { throw AnalysisError.invalid("Cannot create PDF drawing context.") }
+        func text(_ value: String, _ top: CGFloat, _ size: CGFloat = 10, _ height: CGFloat = 28, x: CGFloat = 44, width: CGFloat = 524) {
+            let font = CTFontCreateWithName("Helvetica" as CFString, size, nil)
+            let attributes: [NSAttributedString.Key: Any] = [NSAttributedString.Key(kCTFontAttributeName as String): font,
+                NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(gray: 0.12, alpha: 1)]
+            let string = NSAttributedString(string: value, attributes: attributes)
+            let frame = CTFramesetterCreateFrame(CTFramesetterCreateWithAttributedString(string), CFRange(location: 0, length: 0),
+                CGPath(rect: CGRect(x: x, y: 792 - top - height, width: width, height: height), transform: nil), nil)
+            CTFrameDraw(frame, context)
+        }
+        func begin(_ page: Int) {
+            context.beginPDFPage(nil)
+            context.setFillColor(CGColor(gray: 1, alpha: 1)); context.fill(box)
+            text("BetterVMAF · comparison record", 28, 9)
+            text("\(page)", 752, 9, x: 544, width: 24)
+        }
+        try Task.checkCancellation()
+        begin(1)
+        text("Source versus encode", 56, 23, 36)
+        text("Source: \(analysis.reference.filename)", 106, 11, 34)
+        text("Encode: \(analysis.comparison.filename)", 143, 11, 34)
+        text("\(analysis.samples.count) matched frames · \(String(format: "%.6f", analysis.comparedDuration)) seconds · \(analysis.configuration.coverage) coverage", 184)
+        let saved = analysis.reference.byteCount - analysis.comparison.byteCount
+        text("File size: \(analysis.reference.byteCount) → \(analysis.comparison.byteCount) bytes (\(saved) bytes saved)", 209)
+        text("Size savings are separate from quality measurements.", 232, 9)
+        var y: CGFloat = 266
+        if options.includeAggregateMetrics {
+            text("Named measurements · upstream aggregates", y, 13); y += 26
+            let entries = [("VMAF v1 · upstream mean", ComparisonTradeoffs.nativeValue("vmaf", in: analysis), "model score"),
+                           ("XPSNR · minimum native plane average", analysis.aggregateMetrics["xpsnr_min_plane"], "dB"),
+                           ("Source CAMBI", ComparisonTradeoffs.nativeValue("cambi_source", in: analysis), "banding index"),
+                           ("Encode CAMBI", ComparisonTradeoffs.nativeValue("cambi_encode", in: analysis), "banding index"),
+                           ("Introduced CAMBI", ComparisonTradeoffs.nativeValue("cambi_full_reference", in: analysis), "banding index")]
+            for (name, value, unit) in entries {
+                let formatted = value.map { $0.finiteValue.map { String(format: "%.4f", $0) } ?? ExportManager.value($0) } ?? "unavailable"
+                text("\(name): \(formatted) \(unit)", y); y += 19
             }
         }
-        
-        NSGraphicsContext.restoreGraphicsState()
-        
-        // Create PDF data from the bitmap
-        let image = NSImage(size: pageSize)
-        image.addRepresentation(bitmapRep)
-        let pdfPage = PDFPage(image: image)!
-        pdfPage.setBounds(firstPageBounds, for: .mediaBox)
-        pdfDocument.insert(pdfPage, at: 0)
-        
-        // Frame data on new pages if needed
-        if includeFrameData {
-            let headers = ["Frame", "Time", "VMAF", "Motion", "ADM2"]
-            let columnWidths: [CGFloat] = [60, 80, 80, 80, 80]
-            let startX: CGFloat = 48
-            
-            func createNewPage() -> (NSBitmapImageRep, NSGraphicsContext) {
-                let imageRep = NSBitmapImageRep(
-                    bitmapDataPlanes: nil,
-                    pixelsWide: Int(pageSize.width),
-                    pixelsHigh: Int(pageSize.height),
-                    bitsPerSample: 8,
-                    samplesPerPixel: 4,
-                    hasAlpha: true,
-                    isPlanar: false,
-                    colorSpaceName: .calibratedRGB,
-                    bytesPerRow: 0,
-                    bitsPerPixel: 0
-                )!
-                
-                let context = NSGraphicsContext(bitmapImageRep: imageRep)!
-                return (imageRep, context)
-            }
-            
-            var (currentImageRep, currentContext) = createNewPage()
-            NSGraphicsContext.saveGraphicsState()
-            NSGraphicsContext.current = currentContext
-            
-            yPosition = pageSize.height - 36
-            
-            func drawTableHeaders() {
-                drawText("Frame Data", at: NSPoint(x: 36, y: yPosition), font: headerFont)
-                yPosition -= 36
-                var x = startX
-                for (header, width) in zip(headers, columnWidths) {
-                    drawText(header, at: NSPoint(x: x, y: yPosition), font: bodyFont.bold())
-                    x += width
-                }
-                yPosition -= 24
-            }
-            
-            drawTableHeaders()
-            
-            for metric in result.frameMetrics {
-                if yPosition < 72 {
-                    // Finish current page
-                    NSGraphicsContext.restoreGraphicsState()
-                    let image = NSImage(size: pageSize)
-                    image.addRepresentation(currentImageRep)
-                    let pdfPage = PDFPage(image: image)!
-                    pdfPage.setBounds(firstPageBounds, for: .mediaBox)
-                    pdfDocument.insert(pdfPage, at: pdfDocument.pageCount)
-                    
-                    // Start new page
-                    (currentImageRep, currentContext) = createNewPage()
-                    NSGraphicsContext.saveGraphicsState()
-                    NSGraphicsContext.current = currentContext
-                    
-                    yPosition = pageSize.height - 36
-                    drawTableHeaders()
-                }
-                
-                var x = startX
-                let rowData = [
-                    String(metric.frameNumber),
-                    String(format: "%.2fs", metric.timestamp),
-                    String(format: "%.2f", metric.vmafScore),
-                    String(format: "%.2f", metric.integerMotion),
-                    String(format: "%.2f", metric.integerAdm2)
-                ]
-                
-                for (value, width) in zip(rowData, columnWidths) {
-                    drawText(value, at: NSPoint(x: x, y: yPosition), font: bodyFont)
-                    x += width
-                }
-                yPosition -= 20
-            }
-            
-            // Add final data page
-            NSGraphicsContext.restoreGraphicsState()
-            let finalImage = NSImage(size: pageSize)
-            finalImage.addRepresentation(currentImageRep)
-            let finalPage = PDFPage(image: finalImage)!
-            finalPage.setBounds(firstPageBounds, for: .mediaBox)
-            pdfDocument.insert(finalPage, at: pdfDocument.pageCount)
+        if options.includeGraphs {
+            text("VMAF · \(String(format: "%.2f", result.minScore))–\(String(format: "%.2f", result.maxScore)) · 0–\(String(format: "%.3f", result.duration)) s", y, 12); y += 24
+            try graph(result.frameMetrics, duration: result.duration, in: CGRect(x: 44, y: 792 - y - 104, width: 524, height: 104), context: context)
+            y += 115
         }
-        
-        return pdfDocument.dataRepresentation() ?? Data()
+        text("Viewing assumptions and provenance", y, 12); y += 24
+        text("Model: \(analysis.modelIdentifier) · \(analysis.configuration.viewingProfile.label)", y, 9); y += 23
+        text("\(analysis.configuration.colorPolicy)", y, 9, 34); y += 35
+        text("Run: \(analysis.runID.uuidString)\nSource SHA-256: \(analysis.reference.sha256)\nEncode SHA-256: \(analysis.comparison.sha256)\nModel SHA-256: \(analysis.modelSHA256)\nEngine SHA-256: \(analysis.engineSHA256)\nApp \(analysis.appVersion) · streams source #\(analysis.referenceStream.index) / encode #\(analysis.comparisonStream.index)", y, 8, 70); y += 75
+        text("Full hashes, streams, metric definitions, transforms and frame timestamps are available in JSON. Measurements identify differences; they do not establish a percentage of retained quality or visual transparency.", min(y, 690), 9, 48)
+        context.endPDFPage()
+        if options.includeFrameData {
+            for start in stride(from: 0, to: analysis.samples.count, by: 32) {
+                try Task.checkCancellation()
+                begin(2 + start / 32)
+                text("Analyzed frame data", 60, 20, 34)
+                text("Frame        Time (seconds)                  VMAF", 106, 11)
+                for (offset, sample) in analysis.samples[start..<min(start + 32, analysis.samples.count)].enumerated() {
+                    let vmaf = sample.values["vmaf"].map(ExportManager.value) ?? "unavailable"
+                    text("\(sample.pair.index)             \(String(format: "%.6f", sample.pair.timestamp))                         \(vmaf)", 138 + CGFloat(offset) * 18, 10)
+                }
+                text("All metric channels and original PTS are retained in CSV/JSON.", 729, 9)
+                context.endPDFPage()
+            }
+        }
+        context.closePDF()
+        try Task.checkCancellation()
+        return data as Data
     }
-    
-    private static func drawText(_ text: String, at point: NSPoint, font: NSFont) {
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: NSColor.black
-        ]
-        (text as NSString).draw(at: point, withAttributes: attributes)
-    }
-    
-    private static func renderViewToImage(_ view: some View) -> NSImage? {
-        let hostingView = NSHostingView(rootView: view)
-        hostingView.frame = CGRect(x: 0, y: 0, width: 540, height: 200)  // 612 - 72 for margins
-        
-        hostingView.layout()
-        let imageRep = hostingView.bitmapImageRepForCachingDisplay(in: hostingView.bounds)
-        hostingView.cacheDisplay(in: hostingView.bounds, to: imageRep!)
-        
-        let image = NSImage(size: hostingView.bounds.size)
-        image.addRepresentation(imageRep!)
-        return image
+    private static func graph(_ frames: [VMAFCalculator.FrameMetric], duration: Double, in rect: CGRect, context: CGContext) throws {
+        guard !frames.isEmpty else { return }
+        let count = 512
+        var low = [Double](repeating: .infinity, count: count)
+        var high = [Double](repeating: -.infinity, count: count)
+        var minimum = Double.infinity, maximum = -Double.infinity
+        for (index, frame) in frames.enumerated() {
+            if index % 1024 == 0 { try Task.checkCancellation() }
+            guard frame.vmafScore.isFinite else { continue }
+            let bucket = min(count - 1, max(0, Int(frame.timestamp / max(duration, 0.001) * Double(count - 1))))
+            low[bucket] = min(low[bucket], frame.vmafScore); high[bucket] = max(high[bucket], frame.vmafScore)
+            minimum = min(minimum, frame.vmafScore); maximum = max(maximum, frame.vmafScore)
+        }
+        guard minimum.isFinite else { return }
+        let padding = max((maximum - minimum) * 0.1, 0.5)
+        let domainMinimum = minimum - padding
+        let span = maximum - minimum + padding * 2
+        context.setStrokeColor(CGColor(gray: 0.75, alpha: 1)); context.setLineWidth(0.5); context.stroke(rect)
+        context.setStrokeColor(CGColor(red: 0.12, green: 0.32, blue: 0.70, alpha: 1)); context.setLineWidth(1)
+        for index in 0..<count where low[index].isFinite {
+            let x = rect.minX + CGFloat(index) / CGFloat(count - 1) * rect.width
+            let y1 = rect.minY + 4 + (low[index] - domainMinimum) / span * (rect.height - 8)
+            let y2 = rect.minY + 4 + (high[index] - domainMinimum) / span * (rect.height - 8)
+            context.move(to: CGPoint(x: x, y: y1)); context.addLine(to: CGPoint(x: x, y: max(y1 + 0.7, y2)))
+        }
+        context.strokePath()
+        var started = false
+        for index in 0..<count where low[index].isFinite {
+            let x = rect.minX + CGFloat(index) / CGFloat(count - 1) * rect.width
+            let y = rect.minY + 4 + ((low[index] + high[index]) / 2 - domainMinimum) / span * (rect.height - 8)
+            if started { context.addLine(to: CGPoint(x: x, y: y)) }
+            else { context.move(to: CGPoint(x: x, y: y)); started = true }
+        }
+        context.strokePath()
     }
 }
-
-private extension NSFont {
-    func bold() -> NSFont {
-        return NSFontManager.shared.convert(self, toHaveTrait: .boldFontMask)
-    }
-} 

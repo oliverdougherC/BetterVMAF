@@ -1,0 +1,2 @@
+docs/evidence/*.json linguist-generated=true
+VMAF/Resources/engine/** linguist-vendored=true

@@ -1,0 +1,597 @@
+{
+  "app_pid": 88556,
+  "interval_seconds": 1,
+  "notes": "ps sampled RSS and recent CPU%, not lifetime peak or instantaneous utilization. Child tree rooted at app PID only. Concurrent Animation Hitches tracing adds overhead.",
+  "samples": [
+    {
+      "utc": "2026-09-13T02:28:57.929391+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.7,
+          "rss_bytes": 42139648,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        },
+        {
+          "pid": 90184,
+          "ppid": 88556,
+          "cpu_percent": 737.8,
+          "rss_bytes": 3643441152,
+          "executable": "/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/Resources/engine/ffmpeg"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:28:58.988151+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.3,
+          "rss_bytes": 40501248,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        },
+        {
+          "pid": 90184,
+          "ppid": 88556,
+          "cpu_percent": 0.0,
+          "rss_bytes": 0,
+          "executable": "(ffmpeg)"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:00.041724+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 38.0,
+          "rss_bytes": 192757760,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:01.095099+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 1.0,
+          "rss_bytes": 192757760,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:02.140771+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 192806912,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:03.201909+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 192380928,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:04.256393+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 192348160,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:05.314745+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 188334080,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:06.366910+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.1,
+          "rss_bytes": 188301312,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:07.422867+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 188170240,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:08.478836+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 188170240,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:09.536217+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 188170240,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:10.592831+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 188219392,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:11.649215+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.4,
+          "rss_bytes": 188252160,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:12.706321+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 188252160,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:13.759380+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 188252160,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:14.817878+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 188252160,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:15.871735+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.9,
+          "rss_bytes": 188252160,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:16.935336+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 188301312,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:17.983094+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 188301312,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:19.028488+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 188301312,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:20.073961+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 188301312,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:21.118889+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 188203008,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:22.165481+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 188203008,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:23.213150+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 187678720,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:24.259843+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 187678720,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:25.305635+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 187678720,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:26.348007+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 187662336,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:27.389028+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 187662336,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:28.432249+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 187662336,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:29.480516+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 9.7,
+          "rss_bytes": 187875328,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:30.522968+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.2,
+          "rss_bytes": 187711488,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:31.567371+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 187695104,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:32.612571+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 187711488,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:33.657229+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 187711488,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:34.703080+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 187678720,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:35.745005+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 187711488,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:36.790114+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 187711488,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:37.837801+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 0.0,
+          "rss_bytes": 187727872,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:38.883102+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 27.9,
+          "rss_bytes": 200835072,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:39.925817+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 36.9,
+          "rss_bytes": 226525184,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:40.971273+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 35.9,
+          "rss_bytes": 226099200,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:42.018520+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 36.9,
+          "rss_bytes": 226426880,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:43.061909+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 43.8,
+          "rss_bytes": 223952896,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:44.109768+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 35.7,
+          "rss_bytes": 220839936,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:45.153316+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 40.0,
+          "rss_bytes": 238419968,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:46.198475+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 47.7,
+          "rss_bytes": 225509376,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    },
+    {
+      "utc": "2026-09-13T02:29:47.247785+00:00",
+      "processes": [
+        {
+          "pid": 88556,
+          "ppid": 1,
+          "cpu_percent": 38.2,
+          "rss_bytes": 230375424,
+          "executable": "/private/tmp/bettervmaf-integration-build/Build/Products/Debug/Better VMAF.app/Contents/MacOS/Better VMAF"
+        }
+      ]
+    }
+  ]
+}

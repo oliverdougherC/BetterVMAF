@@ -1,0 +1,144 @@
+{
+  "architecture": "arm64",
+  "capabilities": [
+    "libvmaf-v1",
+    "xpsnr",
+    "cambi-full-reference",
+    "ffprobe-json",
+    "av1-software-decoding"
+  ],
+  "configureArguments": [
+    "--prefix=/Users/ofhd/Library/Caches/BetterVMAF-engine/prefix",
+    "--arch=arm64",
+    "--cc=clang",
+    "--enable-libvmaf",
+    "--enable-libdav1d",
+    "--enable-static",
+    "--disable-shared",
+    "--disable-autodetect",
+    "--disable-doc",
+    "--disable-debug",
+    "--disable-ffplay",
+    "--disable-network",
+    "--enable-videotoolbox",
+    "--enable-audiotoolbox",
+    "--enable-zlib",
+    "--pkg-config-flags=--static",
+    "--extra-cflags=-mmacosx-version-min=15.2",
+    "--extra-ldflags=-mmacosx-version-min=15.2",
+    "--extra-libs=-lc++"
+  ],
+  "engineID": "bettervmaf-arm64-ffmpeg8.1-vmaf-f85a853-dav1d1.5.3",
+  "files": {
+    "ffmpeg": {
+      "bytes": 23128832,
+      "sha256": "3581cfbde33eca27d5ceca86cc2c847aca7936266a76a3f5a7b29607abb4c529"
+    },
+    "ffprobe": {
+      "bytes": 22954528,
+      "sha256": "4474bd44e4e380b81e5ad862d94bfb7a5a0a8a9d9880c384c152a68ea4e5d523"
+    },
+    "licenses/FFmpeg-LGPL-2.1.txt": {
+      "bytes": 26517,
+      "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
+    },
+    "licenses/FFmpeg-license-details.md": {
+      "bytes": 4346,
+      "sha256": "2e1d16c72fd74e12063776371da757322f8b77589386532f4fd8634bde7de1af"
+    },
+    "licenses/NOTICE.txt": {
+      "bytes": 1799,
+      "sha256": "8ff928016ba985b243447b55f95d6c068aa636cb14c6d867580ba970f1af3592"
+    },
+    "licenses/dav1d-AOM-PATENTS.txt": {
+      "bytes": 5730,
+      "sha256": "335eca574598bf4ca181b12f708d6669e5a5e78c8e1513e5b35fa1f03901484b"
+    },
+    "licenses/dav1d-BSD-2-Clause.txt": {
+      "bytes": 1317,
+      "sha256": "dd92c3c2247c5651606fc23a5e2d6a1ebc5ace9a3e49cbde0e12f05ad1cb1ee5"
+    },
+    "licenses/libsvm-COPYRIGHT.txt": {
+      "bytes": 1496,
+      "sha256": "547e4ed8decd262cb6355afb562c0da4b2ed5fd8aa28715df0bae2f2dedb31d6"
+    },
+    "licenses/libvmaf-BSD-2-Clause-Patent.txt": {
+      "bytes": 2833,
+      "sha256": "a6fdb51d02b9dfe198e55534bb8047fe6d756eda117f4ff83de98f92c1952710"
+    },
+    "models/vmaf_v0.6.1neg.json": {
+      "bytes": 19519,
+      "sha256": "1fcda193aaa2a3136471b7516b3c5dc344546c05fcde2d58609f8c60a2387392"
+    },
+    "models/vmaf_v1.0.16_1d5h_2160.json": {
+      "bytes": 14627,
+      "sha256": "634d36e0502cb797384726cdd1a106a2c207827595a9e4958d3dae1bd517b139"
+    },
+    "models/vmaf_v1.0.16_3d0h.json": {
+      "bytes": 14696,
+      "sha256": "e4cf8c147e1368b35497d772920bc92f98c1ad7853c1033d8a836947f427140e"
+    },
+    "models/vmaf_v1.0.16_3d0h_2160.json": {
+      "bytes": 14719,
+      "sha256": "77f552fd8d5b6c6a2166bfc4470c9368ec68d2425ed40f1cc235b0cc500f33c2"
+    },
+    "models/vmaf_v1.0.16_5d0h.json": {
+      "bytes": 14746,
+      "sha256": "64e12d9c1e4ed5d79da7fa515b82fac7247a9e2ccc91e0ebce31d05489500385"
+    },
+    "models/vmaf_v1.0.16_hfr_1d5h_2160.json": {
+      "bytes": 14724,
+      "sha256": "0371db55d3de81a760125f6d65eb4386f1d38af6cf1d00c2f48158e3596246d4"
+    },
+    "models/vmaf_v1.0.16_hfr_3d0h.json": {
+      "bytes": 14793,
+      "sha256": "dcfdfab1c00685c1e5f75b6f1078bb4a44c722654e4de090fa5c66784c75241b"
+    },
+    "models/vmaf_v1.0.16_hfr_3d0h_2160.json": {
+      "bytes": 14816,
+      "sha256": "1bc502f00aeee11433e2d09468186bbf1bbce56ee650c9bade06c7435ebdd4db"
+    },
+    "models/vmaf_v1.0.16_hfr_5d0h.json": {
+      "bytes": 14843,
+      "sha256": "590f612c87df94badca58e563b318fa9958eac631ab8aadd73bff8cc1adfc515"
+    },
+    "vmaf": {
+      "bytes": 1064880,
+      "sha256": "c78671a4473f3fb33b3cc04c0877dda73090a1bab8ed1ce1deb65979bd20b761"
+    }
+  },
+  "minimumMacOS": "15.2",
+  "schemaVersion": 1,
+  "sources": {
+    "dav1d": {
+      "license": "BSD-2-Clause",
+      "repository": "https://code.videolan.org/videolan/dav1d.git",
+      "revision": "b546257f770768b2c88258c533da38b91a06f737",
+      "sourceArchive": "dav1d-b546257f770768b2c88258c533da38b91a06f737.tar",
+      "sourceArchiveSHA256": "f08da2a2edd99a5819e42b97e2f8c4f54bf5b3082e2dc4abb67f48bf55dee50d",
+      "version": "1.5.3"
+    },
+    "ffmpeg": {
+      "license": "LGPL-2.1-or-later",
+      "repository": "https://github.com/FFmpeg/FFmpeg.git",
+      "revision": "9047fa1b084f76b1b4d065af2d743df1b40dfb56",
+      "sourceArchive": "ffmpeg-9047fa1b084f76b1b4d065af2d743df1b40dfb56.tar",
+      "sourceArchiveSHA256": "44197db44fa085441f1717d12770e606ec074de3c2879a93dd03ca07ac97054b",
+      "version": "8.1"
+    },
+    "vmaf": {
+      "license": "BSD-2-Clause-Patent",
+      "repository": "https://github.com/Netflix/vmaf.git",
+      "revision": "f85a853692a8c730d0270cd733c8bb30b5b93b7c",
+      "sourceArchive": "vmaf-f85a853692a8c730d0270cd733c8bb30b5b93b7c.tar",
+      "sourceArchiveSHA256": "174257cfc9b61dba991cb5208cabcb34f629a280c6c66a93f2d411a6b79d83a5",
+      "version": "3.2.0+f85a853"
+    }
+  },
+  "toolchain": {
+    "clang": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+    "meson": "1.10.1",
+    "ninja": "1.13.0",
+    "sdk": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk"
+  }
+}
