@@ -1,0 +1,87 @@
+{
+  "recorded_utc": "2026-09-13T02:15:17.297582+00:00",
+  "machine": "Apple M4 Pro, 24 GiB, macOS27.0 build26A428",
+  "fixture": {
+    "files": [
+      {
+        "name": "review_reference.mp4",
+        "sha256": "926618a96f8066745659b118dd1397843f31d9d4963c3ed810a997b4736012db",
+        "bytes": 845620
+      },
+      {
+        "name": "review_sustained.mp4",
+        "sha256": "f9c7c0c3d343393a66e47f7a4463bcd19140003419236fc360cd11916c4224f5",
+        "bytes": 677341
+      }
+    ],
+    "defect_interval_seconds": [
+      1.0,
+      1.5
+    ],
+    "zero_based_defect_frames": [
+      24,
+      35
+    ],
+    "frames": 48,
+    "fps": 24,
+    "size": [
+      640,
+      360
+    ],
+    "format": "H264 lossless8-bit review derivative; BT709 matrix, primaries/transfer unspecified in files actually exercised",
+    "rights": "Synthetic generated scene, MIT; see corpus manifest",
+    "later_regeneration": "After this walkthrough, the corpus owner regenerated these paths with explicit BT709 primaries/transfer. Retained study hashes identify the earlier files actually observed; final corrected files require separate validation."
+  },
+  "framewise": {
+    "commit": "e56c4dc713b097cf9b8e816d12cc8dbf89634388",
+    "build": "./build.sh default; libvmaf3.1.0 statically included; ad-hoc signed arm64 app reports0.7.0",
+    "open_pair": true,
+    "locate_defect": true,
+    "inspect_visual": true,
+    "selected_zero_based_frame": 35,
+    "selected_source_burned_in_time_seconds": 1.458,
+    "route": "Open A; Open B; Error over time; Worst0:01",
+    "pair_open_automation_elapsed_seconds": 59.755,
+    "known_defect_automation_elapsed_seconds_from_start": 72.648,
+    "timing_limit": "Tool round trips and file-panel automation retries included. Not a human task-time or app-latency measurement.",
+    "native_save_evidence": "No File-menu export or screenshot handler found in exercised build. Tool screenshot captured in task transcript only."
+  },
+  "video_compare": {
+    "commit": "dcdbefcdf7900659cb1a1f2631edbccfdcb1398c",
+    "version": "20260828-reykjavik",
+    "build": "make -j4 USE_PKG_CONFIG=1 with Xcode26.5 isysroot after macOS27 CLT SDK linker mismatch",
+    "runtime_inputs_decoded": true,
+    "open_pair_visual_confirmation": false,
+    "locate_defect": false,
+    "inspect_visual": false,
+    "native_save_evidence": "Not exercised",
+    "blocker": "Native CUA attachment to running SDL app timed out both by app path and bundle identifier. Decoder logs show both intended640x36024fps2s H264 inputs. This is an automation limitation, not a demonstrated product failure."
+  },
+  "bettervmaf": {
+    "status": "Integrated native fixed-task pass observed by parent/comparison_ui and saved files independently inspected in performance lane.",
+    "open_pair": true,
+    "locate_defect": true,
+    "inspect_visual": true,
+    "native_save_evidence": true,
+    "source_sha256": "695f3d706e25218df30476db0aa78cda2e6971e459337806ae942a6bf8e0844a",
+    "encode_sha256": "8aa96142b18b6d0e24d35ce0b00b4f3b666589771706b0d6dc1fe5e3492947f9",
+    "schema_version": 1,
+    "samples": 48,
+    "compared_duration_seconds": 2.0000000000000013,
+    "seek_observation": "Parent selected frame24 at1.0s inside injected interval; Previous selected frame23 with both burned-in frame labels matching.",
+    "pdf_observation": "comparison_ui rendered and visually inspected the native-saved1page vectorPDF; no clipping.",
+    "artifacts": [
+      {
+        "path": "/tmp/bettervmaf-performance/ui-workload/BetterVMAF-ui-save-qa.json",
+        "bytes": 67406,
+        "sha256": "6529ef67cae6834b27f01478d813f3a1da7717fab8f8ed137d4d862a3527dff4"
+      },
+      {
+        "path": "/tmp/bettervmaf-performance/ui-workload/BetterVMAF-ui-save-qa.pdf",
+        "bytes": 27225,
+        "sha256": "90397a7803049f99ec19fa794c20aea31c0ce58ef8eb8ab65725b0202f6c4393"
+      }
+    ],
+    "limitation": "Corrected regenerated corpus derivatives differ from Framewise walkthrough input hashes. No same-file speed/metric comparison or performance superiority asserted. No human task-time measurement."
+  }
+}

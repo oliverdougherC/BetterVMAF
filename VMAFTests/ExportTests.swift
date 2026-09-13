@@ -69,7 +69,6 @@ struct ExportTests {
         let qaURL = FileManager.default.temporaryDirectory.appendingPathComponent("bettervmaf-summary-qa.pdf")
         try data.write(to: qaURL)
         print("PDF_QA_PATH \(qaURL.path)")
-        print("PDF_QA_BASE64 \(data.base64EncodedString())")
     }
     @Test func cancellationPreservesExistingDestinationAndRemovesStaging() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

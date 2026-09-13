@@ -49,8 +49,13 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
-      # These currently exercise the Xcode template and app launch only.
-      # Passing CI does not establish metric or comparison correctness.
+      - name: Verify pinned native engine with system-only runtime paths
+        run: |
+          test "$(uname -m)" = arm64
+          python3 scripts/engine/verify.py --engine VMAF/Resources/engine --report build/engine-verification.json
+
+      # Native process/schema/corpus seams supplement UI launch checks.
+      # Interactive display fidelity still needs actual Mac inspection.
       - name: Run unit and UI tests
         run: |
           xcodebuild \
@@ -71,6 +76,8 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: macOS-test-results
-          path: build/TestResults.xcresult
+          path: |
+            build/TestResults.xcresult
+            build/engine-verification.json
           if-no-files-found: ignore
           retention-days: 14

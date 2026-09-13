@@ -29,6 +29,14 @@ Ask of every visible element: **Does the user need to see this? Is this the most
 - Use the shared Xcode scheme and CI commands documented in `CONTRIBUTING.md`. Report explicitly when macOS execution was unavailable.
 - Keep native helper binaries pinned, checksummed, and accompanied by their source/build/license provenance. Do not silently substitute a different system engine.
 
-## Scope
+## Current integration contract
 
-The current cleanup establishes the development foundation and roadmap. Multi-metric scoring, player replacement, and the engine refactor are planned work, not existing app capabilities.
+The 2.0 review branch implements Standard SDR analysis and paired inspection. Read `docs/ARCHITECTURE.md`, `docs/WORKFLOW.md`, `docs/VALIDATION.md` and `docs/ENGINE.md` before changing it. Validation status is evidence-based, not implied by this description.
+
+- Preserve exact rational PTS when seeking; rounding a frame boundary down can display the preceding frame.
+- Native summaries live in `pooledMetrics` plus specifically named `aggregateMetrics`; reuse the shared accessor. Directions are `higher`/`lower`.
+- Keep original frames separate from viewport reduction. Duration-weighted distributions supplement upstream pooling.
+- Single results and batch configurations are immutable snapshots. Batch/result caps are explicit; do not silently remove evidence to make a long run fit.
+- Unsupported AVFoundation playback keeps the analysis result and displays an explicit explanation.
+- Deep/HDR/Quick experiments are deferred unless their documented integration gates pass. Do not enable approximations under those names.
+- Build subprocesses must use a restricted environment; never serialize credentials or inherited environment dumps into artifacts.

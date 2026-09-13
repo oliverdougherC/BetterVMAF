@@ -1,6 +1,6 @@
 # BetterVMAF: product positioning and comparison workflow
 
-Research checked 2026-09-13 against primary project documentation and vendor pages. This is product research, not a hands-on performance or UX audit. Feature availability is documented, not independently exercised. Recommendations below are product judgments.
+Research checked 2026-09-13 against primary project documentation and vendor pages. The original table is historical research; [ALTERNATIVE_COMPARISON.md](ALTERNATIVE_COMPARISON.md) records the later hands-on native comparison and corrected build behavior. Feature availability is documented, not independently exercised. Recommendations below are product judgments.
 
 ## Finding
 
@@ -23,7 +23,7 @@ Suggested positioning: **A free Mac app that shows what your encode changed, whe
 | [ffWorks](https://www.ffworks.net/) | macOS application; vendor lists €22 | Encoding workstation plus VMAF, PSNR, SSIM, CAMBI and bitrate analysis | Multi-metric Mac applications already exist at low prices. Free remains a differentiator against this product, not against the entire category. |
 | [Telestream Switch](https://www.telestream.net/switch/overview.htm) | Commercial Mac/Windows media inspection product | Pro includes full/split/difference comparison against up to 16 alternate files, frame-accurate playback, bitrate/GOP views and scopes | Mature adjacent reference for visual inspection. Its documented comparison feature is not evidence of a VMAF-like multi-metric report. |
 
-Framewise caveat: VMAF is opt-in at build time and its default build does not link it. The project documents current-frame region exploration and an error-over-time feature, but the research did not validate throughput, long-clip handling, shipped download availability or model conformance. That leaves meaningful engineering work for BetterVMAF, without proving Framewise fails those requirements. [Framewise documentation](https://github.com/vork/Framewise)
+Framewise update: the later inspected `e56c4dc` build enables VMAF by default; the earlier opt-in description was stale. The project documents current-frame region exploration and an error-over-time feature, but the research did not validate throughput, long-clip handling, shipped download availability or model conformance. That leaves meaningful engineering work for BetterVMAF, without proving Framewise fails those requirements. [Framewise documentation](https://github.com/vork/Framewise)
 
 VQ Probe caveat: the marketing page and 2025 brochure call the tool free; the current portal's indexed text advertises Pro at €49/month or €529/year and a seven-day trial. Opening the portal returns a JavaScript shell. The safe statement is that Mac support and extensive comparison features are advertised, while current free-tier access remains uncertain. [Marketing page](https://vicuesoft.com/vq-probe/), [official portal](https://portal.vicuesoft.com/)
 

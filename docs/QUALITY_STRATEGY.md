@@ -1,6 +1,6 @@
 # BetterVMAF quality assessment research
 
-Research date: 2026-09-13. This is the proposed development strategy, not an implemented capability or benchmark result. Implementation priorities and acceptance criteria live in the [BetterVMAF Linear project](https://linear.app/platinum-labs/project/bettervmaf-bb52721c0728).
+Research date: 2026-09-13. The research below motivates the implementation; current availability and acceptance evidence are in [VALIDATION.md](VALIDATION.md), [ENGINE.md](ENGINE.md), [CORPUS.md](CORPUS.md) and [EXPERIMENTS.md](EXPERIMENTS.md). Standard SDR is implemented on the review branch; Deep/HDR/Quick remain disabled. Implementation priorities and acceptance criteria live in the [BetterVMAF Linear project](https://linear.app/platinum-labs/project/bettervmaf-bb52721c0728).
 
 ## Decision
 

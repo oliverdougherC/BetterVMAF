@@ -62,10 +62,22 @@ final class PlaybackController: ObservableObject {
                         let message = item.error?.localizedDescription
                         Task { @MainActor [weak self] in
                             guard let self, self.generation == loadID else { return }
-                            if failed { self.pause(); self.ready = false; self.error = message ?? "Native playback failed for this codec. Use a supported lossless intermediate and reanalyze it." }
+                            if failed { self.pause(); self.ready = false; self.seeking = false; self.error = message ?? "Native playback failed for this codec. Use a supported lossless intermediate and reanalyze it." }
                         }
                     })
                 }
+            }
+            // Playability describes the asset; both player items must finish asynchronous preparation.
+            for attempt in 0..<500 {
+                try Task.checkCancellation()
+                guard generation == loadID else { return }
+                let items = [referencePlayer.currentItem, comparisonPlayer.currentItem]
+                if items.allSatisfy({ $0?.status == .readyToPlay }) { break }
+                if let failed = items.compactMap({ $0 }).first(where: { $0.status == .failed }) {
+                    throw failed.error ?? AnalysisError.invalid("Native decoder preparation failed.")
+                }
+                if attempt == 499 { throw AnalysisError.invalid("Native playback did not become ready. Try reopening the pair or a supported lossless intermediate.") }
+                try await Task.sleep(for: .milliseconds(20))
             }
             ready = true
             observer = referencePlayer.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.04, preferredTimescale: 600), queue: .main) { [weak self] time in
@@ -116,14 +128,23 @@ final class PlaybackController: ObservableObject {
         seekGeneration = request
         seeking = true
         Task { [weak self] in
-            guard let self else { return }
-            async let first = self.referencePlayer.seek(to: referenceTime, toleranceBefore: .zero, toleranceAfter: .zero)
-            async let second = self.comparisonPlayer.seek(to: comparisonTime, toleranceBefore: .zero, toleranceAfter: .zero)
+            guard let self, self.seekGeneration == request, self.ready else { return }
+            async let first = self.exactSeek(self.referencePlayer, to: referenceTime, request: request)
+            async let second = self.exactSeek(self.comparisonPlayer, to: comparisonTime, request: request)
             let completed = await (first, second)
-            guard self.seekGeneration == request else { return }
+            guard self.seekGeneration == request, self.ready else { return }
             self.seeking = false
             if !completed.0 || !completed.1 { self.error = "Native player could not complete this exact frame seek. Retry or use a supported lossless intermediate." }
-            else if resume { self.play() }
+            else { self.error = nil; if resume { self.play() } }
+        }
+    }
+    private func exactSeek(_ player: AVPlayer, to time: CMTime, request: UUID) async -> Bool {
+        guard ready, seekGeneration == request, !Task.isCancelled else { return false }
+        // Register synchronously on the main actor so a stale async-let cannot issue a later seek.
+        return await withCheckedContinuation { continuation in
+            player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { finished in
+                continuation.resume(returning: finished)
+            }
         }
     }
     private func tick(_ referenceTime: Double) {

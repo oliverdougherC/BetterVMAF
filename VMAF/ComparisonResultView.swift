@@ -9,7 +9,7 @@ struct ComparisonResultView: View {
     @State private var selectedConcern: String?
     @State private var provenance = ""
     @State private var selectedMetric = "vmaf"
-    @State private var timeline: [TimelinePoint] = []
+    @State private var timeline: ComparisonTimelineSnapshot?
     @State private var showAllConcerns = false
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -56,9 +56,11 @@ struct ComparisonResultView: View {
                     ForEach(analysis.definitions, id: \.id) { Text($0.name).tag($0.id) }
                 }
                 if let definition = analysis.definitions.first(where: { $0.id == selectedMetric }) {
-                    MetricTimelineView(points: timeline, name: definition.name, unit: definition.unit,
-                        revision: analysis.runID, selectedTime: playback.timestamp, onSeek: { playback.seek(time: $0) })
-                        .id(selectedMetric).frame(height: 230)
+                    if let timeline, timeline.matches(runID: analysis.runID, metricID: selectedMetric) {
+                        MetricTimelineView(points: timeline.points, name: definition.name, unit: definition.unit,
+                            revision: timeline.revision, selectedTime: playback.timestamp, onSeek: { playback.seek(time: $0) })
+                            .id(timeline.revision).frame(height: 230)
+                    } else { ProgressView("Preparing \(definition.name) timeline…").frame(height: 230) }
                     Text("\(definition.direction == "lower" ? "Lower values indicate less measured banding." : "Higher values indicate greater measured source fidelity.") Nonfinite and unavailable values remain in the record and are omitted from the numeric line.").font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -102,21 +104,11 @@ struct ComparisonResultView: View {
         .task(id: "\(result.analysis?.runID.uuidString ?? "legacy")/\(selectedMetric)") {
             let key = selectedMetric
             guard let analysis = result.analysis else { return }
-            let worker = Task.detached(priority: .userInitiated) {
-                var points: [TimelinePoint] = []
-                points.reserveCapacity(analysis.samples.count)
-                var segment = 0
-                for (index, sample) in analysis.samples.enumerated() {
-                    if index % 4096 == 0 && Task.isCancelled { return [] as [TimelinePoint] }
-                    if let value = sample.values[key]?.finiteValue {
-                        points.append(TimelinePoint(id: sample.pair.index, time: sample.pair.timestamp, value: value, segment: segment))
-                    } else { segment += 1 }
-                }
-                return points
-            }
-            let points = await withTaskCancellationHandler { await worker.value } onCancel: { worker.cancel() }
-            guard !Task.isCancelled else { return }
-            timeline = points
+            timeline = nil
+            let worker = Task.detached(priority: .userInitiated) { ComparisonTimelineSnapshot.prepare(analysis, metricID: key) }
+            let prepared = await withTaskCancellationHandler { await worker.value } onCancel: { worker.cancel() }
+            guard !Task.isCancelled, selectedMetric == key else { return }
+            timeline = prepared
         }
         .onDisappear { playback.close() }
         .sheet(isPresented: $showExport) { ExportOptionsView(result: result) }

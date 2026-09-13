@@ -142,6 +142,17 @@ struct WorkflowTests {
         #expect(queue.items[1].result == nil)
         #expect(queue.items[1].error?.contains("retained-frame budget") == true)
     }
+    @Test func metricSwitchPublishesDifferentRevisionAndNativeScaleTogether() {
+        let analysis = ExportFixture.analysis()
+        let quality = ComparisonTimelineSnapshot.prepare(analysis, metricID: "vmaf")
+        let distortion = ComparisonTimelineSnapshot.prepare(analysis, metricID: "xpsnr_u")
+        #expect(quality.points.map(\.time) == distortion.points.map(\.time))
+        #expect(quality.points.map(\.value) == [92, 92, 92])
+        #expect(distortion.points.map(\.value) == [42, 42, 42])
+        #expect(quality.revision != distortion.revision)
+        #expect(!quality.matches(runID: analysis.runID, metricID: "xpsnr_u"))
+        #expect(distortion.matches(runID: analysis.runID, metricID: "xpsnr_u"))
+    }
     @Test func variableFrameNavigationUsesPresentationTimes() {
         let pairs = ExportFixture.analysis().framePairs
         #expect(PlaybackController.index(at: -0.1, frames: pairs) == 0)

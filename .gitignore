@@ -87,3 +87,6 @@ temp_dmg/
 .env
 .env.*
 !.env.example
+
+# Local execution/visual-review state
+.omx/

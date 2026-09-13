@@ -105,12 +105,18 @@ struct VideoInputCard: View {
 
 @MainActor
 enum VideoSelection {
+    private static var choosing = false
     static func choose(multiple: Bool = false, completion: @escaping ([URL]) -> Void) {
+        guard !choosing else { return }
+        choosing = true
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = multiple
         panel.canChooseDirectories = false
         panel.allowedContentTypes = [.movie, .video, .data]
-        panel.begin { response in if response == .OK { completion(panel.urls) } }
+        panel.begin { response in
+            choosing = false
+            if response == .OK { completion(panel.urls) }
+        }
     }
 }
 

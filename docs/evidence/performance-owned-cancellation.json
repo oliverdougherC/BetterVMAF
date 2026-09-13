@@ -1,0 +1,23 @@
+{
+  "results": [
+    {
+      "cancel_to_owner_return_seconds": 0.8135015,
+      "note": "Actual OwnedProcess implementation; return waits for child exit and pipe drains. One trial per worker count, no UI involvement.",
+      "observed_cancellation_error": true,
+      "termination_grace_seconds": 0.75,
+      "threads": 4
+    },
+    {
+      "cancel_to_owner_return_seconds": 0.83549375,
+      "note": "Actual OwnedProcess implementation; return waits for child exit and pipe drains. One trial per worker count, no UI involvement.",
+      "observed_cancellation_error": true,
+      "termination_grace_seconds": 0.75,
+      "threads": 7
+    }
+  ],
+  "recorded_utc": "2026-09-13T02:38:16.769478+00:00",
+  "owned_process_source_sha256": "7fe111a1111ac34db068c86615b0ce07a2556f9fb94ac396dfc700570bda27f8",
+  "engine_sha256": "3581cfbde33eca27d5ceca86cc2c847aca7936266a76a3f5a7b29607abb4c529",
+  "argv_source": "First two trials of performance-worker-counts.json",
+  "hardware": "Apple M4 Pro24GiB"
+}
