@@ -33,7 +33,7 @@ The engine folder is an explicit Xcode folder resource. Do not flatten its files
 ./create_dmg.sh --app '/absolute/path/Better VMAF.app' --output /tmp/Better-VMAF-review.dmg
 ```
 
-The packaging script verifies arm64 helpers, hashes/models, system-only dynamic dependencies and executable permissions, signs helpers before the app, includes corresponding sources/notices, creates the DMG, then mounts it read-only and repeats native metric checks. Sidecars record version, source commit and checksums. No paid account is required. This does not perform public notarization or establish every supported OS/hardware combination.
+The packaging script verifies arm64 helpers, hashes/models, system-only dynamic dependencies and executable permissions, preserves verified helper signatures and signs the app, includes corresponding sources/notices, creates the DMG, then mounts it read-only and repeats native metric checks. Sidecars record version, source commit and checksums. No paid account is required. This does not perform public notarization or establish every supported OS/hardware combination.
 
 ## Completion evidence
 

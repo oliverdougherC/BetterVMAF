@@ -60,7 +60,9 @@ def main():
             raise RuntimeError(f'Expected arm64 app executable, found {arch}')
         manifest = json.loads((engine / 'manifest.json').read_text())
         for helper in ['ffmpeg', 'ffprobe', 'vmaf']:
-            run(['codesign', '--force', '--sign', '-', engine / helper])
+            # These pinned artifacts already have valid ad-hoc signatures. Re-signing
+            # on a different OS can change bytes and invalidate their source manifest.
+            run(['codesign', '--verify', '--strict', engine / helper])
         run(['codesign', '--force', '--sign', '-', '--entitlements', ROOT / 'VMAF/VMAF.entitlements', app])
         run(['codesign', '--verify', '--deep', '--strict', app])
         entitlements = plistlib.loads(subprocess.check_output(['codesign', '-d', '--entitlements', '-', '--xml', app], env=BUILD_ENV, stderr=subprocess.DEVNULL))
@@ -90,7 +92,7 @@ def main():
             assert sha256(mounted / sources.name) == sha256(sources)
         finally:
             run(['hdiutil', 'detach', mounted], stdout=subprocess.DEVNULL)
-        evidence = {'schemaVersion': 1, 'version': version, 'buildNumber': build_number, 'architecture': arch, 'engineID': manifest['engineID'], 'engineManifestSHA256': sha256(engine / 'manifest.json'), 'dmgSHA256': sha256(dmg), 'dmgBytes': dmg.stat().st_size, 'sourceArchiveSHA256': sha256(sources), 'sourceArchiveBytes': sources.stat().st_size, 'signing': 'ad-hoc', 'notarized': False, 'checks': ['engine hashes and native smoke before signing', 'helpers then app ad-hoc signed', 'deep strict signature verification', 'system-only dependencies and PATH', 'mounted read-only DMG native metric smoke', 'matching version and build metadata', 'source companion included and hash verified', 'legacy Intel binary omitted from package'], 'notTested': ['separate pristine Mac', 'macOS 15.2 execution', 'Gatekeeper approval for public distribution', 'interactive packaged-app comparison/cancellation/export'], 'mountedEngineChecks': json.loads((work / 'engine-mounted.json').read_text())['checks']}
+        evidence = {'schemaVersion': 1, 'version': version, 'buildNumber': build_number, 'architecture': arch, 'engineID': manifest['engineID'], 'engineManifestSHA256': sha256(engine / 'manifest.json'), 'dmgSHA256': sha256(dmg), 'dmgBytes': dmg.stat().st_size, 'sourceArchiveSHA256': sha256(sources), 'sourceArchiveBytes': sources.stat().st_size, 'signing': 'ad-hoc', 'notarized': False, 'checks': ['engine hashes and native smoke before signing', 'pinned helper signatures preserved; app ad-hoc signed', 'deep strict signature verification', 'system-only dependencies and PATH', 'mounted read-only DMG native metric smoke', 'matching version and build metadata', 'source companion included and hash verified', 'legacy Intel binary omitted from package'], 'notTested': ['separate pristine Mac', 'macOS 15.2 execution', 'Gatekeeper approval for public distribution', 'interactive packaged-app comparison/cancellation/export'], 'mountedEngineChecks': json.loads((work / 'engine-mounted.json').read_text())['checks']}
         args.output.parent.mkdir(parents=True, exist_ok=True)
         evidence['appSourceCommit'] = source_commit
         evidence['appExecutableSHA256'] = sha256(executable)
