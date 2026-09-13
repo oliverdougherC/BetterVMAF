@@ -40,3 +40,5 @@ The packaging script verifies arm64 helpers, hashes/models, system-only dynamic 
 Add a regression for a repaired defect. Build, run the relevant native suite, inspect UI behavior, and validate the final combined commit. Use Linear statuses honestly: unmerged validated implementation awaits review; missing acceptance remains in progress. See [VALIDATION.md](docs/VALIDATION.md) for the issue mapping and precise gaps. Commit messages record intent and useful Git-native `Tested:`, `Constraint:`, `Rejected:` and `Not-tested:` trailers.
 
 When using `--app`, the Release app must embed the current Git revision: pass `BETTERVMAF_SOURCE_COMMIT=<git rev-parse HEAD>` to xcodebuild. The package validates this field against the checkout, records the executable hash, and explicitly applies/verifies the app sandbox and user-selected file entitlements. Normal `./create_dmg.sh` builds set the revision automatically.
+
+The required `Build and test (macOS 15, Xcode 16.4)` check protects main. CI also builds a sandbox-signed DMG on a fresh hosted Mac and retains it as the `BetterVMAF-arm64-review` workflow artifact for14 days; this is review hosting, not a public GitHub release.

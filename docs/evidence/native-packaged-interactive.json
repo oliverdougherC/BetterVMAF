@@ -1,0 +1,34 @@
+{
+  "app_source_commit": "1bb4f24384a2dcc8c0b0104120f523fec17d5048",
+  "version": "2.0.0",
+  "build": "2",
+  "environment": "Apple M4 Pro24GiB, macOS27, app launched directly from read-only mounted DMG",
+  "entitlements": {
+    "com.apple.security.app-sandbox": true,
+    "com.apple.security.files.user-selected.read-write": true
+  },
+  "debug_exceptions": false,
+  "checks": [
+    "NSOpenPanel selected source/encode outside application container",
+    "Standard48-frame analysis VMAF75/XPSNRminimum5.5821",
+    "Concern1.000\u20131.500 seeks frame24; previous frame23 matches both visible burn-ins",
+    "VMAF\u2192XPSNR selector shows native negative dB values and retains full0\u20132second comparison domain",
+    "NSSavePanel full JSON and summary PDF saved successfully",
+    "4K60 run cancelled during live frame progress; controls restored with no stale result",
+    "Immediate restart completed240frames with HFR VMAF78.360249 and XPSNRminimum38.071"
+  ],
+  "exports": {
+    "BetterVMAF-packaged-review.json": {
+      "sha256": "54f6845b7caa1961589cc37344be128d5e4f690db16619b232d0c50bb85ceb89",
+      "bytes": 67406
+    },
+    "BetterVMAF-packaged-review.pdf": {
+      "sha256": "86b472ab9d441b58ea4218c71926dd70e622801ff87e97c38488f1d352b877ea",
+      "bytes": 27226
+    }
+  },
+  "limitations": [
+    "Exact macOS15.2 physical-machine execution not observed",
+    "Compositor pacing and privileged energy capture remain unverified"
+  ]
+}
