@@ -36,16 +36,6 @@ open VMAF.xcodeproj
 
 Use the shared **VMAF** scheme. See [CONTRIBUTING.md](CONTRIBUTING.md) for build/test commands, workflow, and packaging. `./create_dmg.sh` creates `Better-VMAF.dmg`.
 
-## Development direction
-
-The [BetterVMAF Linear project](https://linear.app/platinum-labs/project/bettervmaf-bb52721c0728) contains the implementation backlog, priorities, dependencies, and acceptance criteria.
-
-- [Metric strategy and validation](docs/QUALITY_STRATEGY.md): current research and the proposed quality profile.
-- [Product direction](docs/PRODUCT_DIRECTION.md): existing alternatives and the intended comparison workflow.
-- [Repository audit](docs/REPOSITORY_AUDIT.md): verified code findings and development risks.
-- [Branch archive](docs/BRANCH_ARCHIVE.md): preserved legacy branch tips and restoration instructions.
-- [Agent guidance](AGENTS.md): project-specific engineering and UX rules.
-
 ## License and dependencies
 
 BetterVMAF's own source is [MIT licensed](LICENSE). Bundled third-party components retain their own licenses. The existing FFmpeg binary identifies GPL and version-3 build options; the app's MIT license does not replace those terms. Reproducible helper builds, notices, and corresponding-source provenance are tracked before the next release.
