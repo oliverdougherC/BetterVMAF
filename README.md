@@ -1,6 +1,6 @@
 # BetterVMAF
 
-A free native macOS app for comparing an encoded video against its source.
+A free, native macOS app for comparing an encoded video against its source.
 
 BetterVMAF currently calculates **VMAF v0.6.1** with bundled FFmpeg and displays summary statistics and per-frame charts. The next development phase expands that into a complementary quality profile, synchronized visual inspection, and clearer evidence of what an encode changed.
 
