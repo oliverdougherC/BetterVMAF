@@ -32,10 +32,18 @@ class ExportManager {
         var templateName: String = "default"
     }
     
+    /// CSV export is an explicitly multi-section document:
+    ///
+    /// 1. a frame table whose header and every record have exactly five fields;
+    /// 2. optional titled key/value sections (`Aggregate Metrics`), separated from the
+    ///    table and each other by blank lines;
+    /// 3. an `Engine` section that is **always** present, so even frame-only exports
+    ///    carry metric provenance (engine name, libvmaf version, motion feature).
+    ///
+    /// Consumers that want a rectangular dataset should read the first section;
+    /// `ExportManager.parse(_:)` consumes the entire file and is exercised against
+    /// this writer in unit tests.
     func exportToCSV(result: VMAFCalculator.VMAFResult, options: ExportOptions) throws -> String {
-        // One uniform table: header and frame records all have five fields so
-        // parsers infer a stable schema; provenance lives in its own trailing
-        // sections instead of a short row above the header.
         // Name the Motion column after the libvmaf feature that produced it;
         // the legacy `integer_motion` and libvmaf 3.x `integer_motion2` are
         // different measurements and must not share an unlabeled column.
@@ -58,15 +66,63 @@ class ExportManager {
             csv += "Min Score,\(result.minScore)\n"
             csv += "Max Score,\(result.maxScore)\n"
             csv += "Harmonic Mean,\(result.harmonicMean)\n"
-            csv += "\n\nEngine\n"
-            csv += "Metric,libvmaf\n"
-            csv += "Version,\(result.libvmafVersion ?? "unknown")\n"
-            if !motionFeature.isEmpty {
-                csv += "Motion feature,\(motionFeature)\n"
-            }
+        }
+
+        // Provenance is unconditional: a frame-only CSV must still state which
+        // engine and feature identities produced its values.
+        csv += "\n\nEngine\n"
+        csv += "Metric,libvmaf\n"
+        csv += "Version,\(result.libvmafVersion ?? "unknown")\n"
+        if !motionFeature.isEmpty {
+            csv += "Motion feature,\(motionFeature)\n"
         }
 
         return csv
+    }
+
+    /// The machine-readable form of `exportToCSV`'s output.
+    struct ParsedCSV: Equatable {
+        var tableHeader: [String] = []
+        var frameRows: [[String]] = []
+        var aggregates: [String: String] = [:]
+        var engine: [String: String] = [:]
+        /// Section titles this parser does not know; empty means the whole file was consumed.
+        var unknownSections: [String] = []
+    }
+
+    /// Parses an entire exported CSV (all sections), so tests can assert the
+    /// full file — not just a prefix — has the documented shape.
+    static func parse(_ csv: String) -> ParsedCSV {
+        var parsed = ParsedCSV()
+        var sections: [[[String]]] = []
+        var current: [[String]] = []
+        for line in csv.components(separatedBy: "\n") {
+            if line.isEmpty {
+                if !current.isEmpty { sections.append(current); current = [] }
+            } else {
+                current.append(line.components(separatedBy: ","))
+            }
+        }
+        if !current.isEmpty { sections.append(current) }
+        guard let table = sections.first else { return parsed }
+        parsed.tableHeader = table.first ?? []
+        parsed.frameRows = Array(table.dropFirst())
+        for section in sections.dropFirst() {
+            guard let titleRow = section.first, titleRow.count == 1 else {
+                parsed.unknownSections.append(section.first.map { $0.joined(separator: ",") } ?? "")
+                continue
+            }
+            let values = section.dropFirst().reduce(into: [String: String]()) { dict, row in
+                guard row.count >= 2 else { return }
+                dict[row[0]] = row[1...].joined(separator: ",")
+            }
+            switch titleRow[0] {
+            case "Aggregate Metrics": parsed.aggregates = values
+            case "Engine": parsed.engine = values
+            default: parsed.unknownSections.append(titleRow[0])
+            }
+        }
+        return parsed
     }
     
     func exportToJSON(result: VMAFCalculator.VMAFResult, options: ExportOptions) throws -> Data {

@@ -64,14 +64,17 @@ and results carry the `libvmaf` version from the log for provenance. The two fea
 **different measurements**: Motion values from the old and new engines are not directly
 comparable and must not be ranked together.
 
-Export shapes follow that identity rule: CSV is one uniform five-column table (absent motion
-is an empty field, never a fabricated `0`) with engine/metric provenance in its own trailing
-sections rather than a short row above the header; JSON omits a motion key entirely when the
-engine did not report it; the PDF sizes frame-table columns from the actual header text so
-`Motion (integer_motion2)` cannot overlap ADM2, and prints `Engine: libvmaf <version>` in the
-summary. `VMAFError` conforms to `LocalizedError` via `errorDescription` so the UI's
-`error.localizedDescription` (caught as `Error`) surfaces the actionable message instead of
-the generic Cocoa fallback.
+Export shapes follow that identity rule: CSV is an explicitly multi-section document — a
+rectangular five-field frame table first (absent motion is an empty field, never a fabricated
+`0`), then titled `Aggregate Metrics` (when requested) and an **always-present** `Engine`
+section (`Metric`, `Version`, motion feature), so even frame-only exports carry provenance.
+`ExportManager.parse(_:)` consumes the entire file and round-trips these sections; the unit
+test drives export→parse over the whole document rather than a prefix. JSON omits a motion
+key entirely when the engine did not report it; the PDF sizes frame-table columns from the
+actual header text so `Motion (integer_motion2)` cannot overlap ADM2, and prints
+`Engine: libvmaf <version>` in the summary. `VMAFError` conforms to `LocalizedError` via
+`errorDescription` so the UI's `error.localizedDescription` (caught as `Error`) surfaces the
+actionable message instead of the generic Cocoa fallback.
 
 The CI job (`Verify bundled FFmpeg engine`) proves the shipped helpers execute by running
 `Fixtures/vmaf-reference.mp4`/`vmaf-comparison.mp4` (24 frames, testsrc2 128x72, CRF 20/42;

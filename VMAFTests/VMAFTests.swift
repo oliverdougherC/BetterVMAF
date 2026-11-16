@@ -149,26 +149,36 @@ struct ExportTests {
                                   libvmafVersion: version)
     }
 
-    @Test func csvKeepsUniformColumnsAndParsesBack() throws {
-        let manager = ExportManager()
+    @Test func csvFullFileImportsAsDocumentedSections() throws {
         let frames = [frame(1, motion: nil, motion2: 1.5), frame(2, motion: nil, motion2: nil)]
-        let csv = try manager.exportToCSV(result: result(frames, version: "3.2.0"), options: .init())
-        let tableSection = csv.components(separatedBy: "\n\nAggregate Metrics")[0]
-        let records = tableSection.split(separator: "\n", omittingEmptySubsequences: false).filter { !$0.isEmpty }
-        // Header + one record per frame, every record exactly five fields.
-        #expect(records.count == frames.count + 1)
-        for record in records {
-            #expect(record.components(separatedBy: ",").count == 5, "non-uniform CSV record: \(record)")
+        let result = self.result(frames, version: "3.2.0")
+        let csv = try ExportManager().exportToCSV(result: result, options: .init())
+
+        // The *entire* exported file must consume cleanly, not just a prefix:
+        // rectangular frame table, then titled metadata sections.
+        let parsed = ExportManager.parse(csv)
+        #expect(parsed.tableHeader == ["Frame Number", "Timestamp", "VMAF Score", "Motion (integer_motion2)", "ADM2"])
+        #expect(parsed.frameRows.count == frames.count)
+        for row in parsed.frameRows {
+            #expect(row.count == 5, "non-uniform frame record: \(row)")
         }
-        let header = records[0].components(separatedBy: ",")
-        #expect(header[3] == "Motion (integer_motion2)") // named after the reported feature
-        let row1 = records[1].components(separatedBy: ",")
-        #expect(Double(row1[3]) == 1.5) // round-trips back to the source value
-        let row2 = records[2].components(separatedBy: ",")
-        #expect(row2[3] == "") // absent motion is empty, never a fabricated 0
-        // Provenance sits in its own section, not above the header.
-        #expect(csv.components(separatedBy: "\n").first!.hasPrefix("Frame Number,"))
-        #expect(csv.contains("Version,3.2.0"))
+        #expect(Double(parsed.frameRows[0][3]) == 1.5)  // value round-trips back
+        #expect(parsed.frameRows[1][3] == "")           // absent motion stays empty
+        #expect(parsed.aggregates["Overall VMAF Score"] == "70.0")
+        #expect(parsed.engine["Metric"] == "libvmaf")
+        #expect(parsed.engine["Version"] == "3.2.0")
+        #expect(parsed.engine["Motion feature"] == "integer_motion2")
+        #expect(parsed.unknownSections.isEmpty)        // nothing in the file went unconsumed
+
+        // Frame-only export keeps engine provenance (reviewer: version was lost).
+        var frameOnly = ExportManager.ExportOptions()
+        frameOnly.includeAggregateMetrics = false
+        let trimmed = try ExportManager().exportToCSV(result: result, options: frameOnly)
+        let trimmedParsed = ExportManager.parse(trimmed)
+        #expect(trimmedParsed.aggregates.isEmpty)
+        #expect(trimmedParsed.engine["Version"] == "3.2.0")
+        #expect(trimmedParsed.unknownSections.isEmpty)
+        #expect(trimmedParsed.frameRows.count == 2)
     }
 
     @Test func jsonOmitsAbsentMotionInsteadOfZeroFilling() throws {
