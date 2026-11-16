@@ -9,7 +9,7 @@ class PDFGenerator {
         let comparisonVideo: URL
     }
     
-    static func generateReport(result: VMAFCalculator.VMAFResult, videoInfo: VideoInfo, includeGraphs: Bool, includeFrameData: Bool) -> Data {
+    static func generateReport(result: VMAFCalculator.VMAFResult, videoInfo: VideoInfo, includeVisualization: Bool, includeFrameData: Bool) -> Data {
         // Create PDF document
         let pdfDocument = PDFDocument()
         let pageSize = NSSize(width: 612, height: 792)  // 8.5x11 inches at 72 DPI
@@ -76,22 +76,14 @@ class PDFGenerator {
         }
         yPosition -= 12
         
-        // Draw graphs
-        if includeGraphs {
-            drawText("Visualization", at: NSPoint(x: 36, y: yPosition), font: headerFont)
+        // Draw the quality heat map
+        if includeVisualization {
+            drawText("Quality Heat Map", at: NSPoint(x: 36, y: yPosition), font: headerFont)
             yPosition -= 36
-            
-            // Line graph
-            if let graphImage = renderViewToImage(VMAFGraphView(frameMetrics: result.frameMetrics)
-                .frame(width: pageSize.width - 72, height: 200)) {
-                graphImage.draw(in: NSRect(x: 36, y: yPosition - 200,
-                                         width: pageSize.width - 72, height: 200))
-                yPosition -= 224
-            }
-            
-            // Heat map
-            if let heatMapImage = renderViewToImage(HeatMapView(frameMetrics: result.frameMetrics)
-                .frame(width: pageSize.width - 72, height: 200)) {
+
+            if let heatMapImage = renderViewToImage(
+                HeatMapView(timeline: QualityTimeline(metrics: result.frameMetrics), interactive: false)
+                    .frame(width: pageSize.width - 72, height: 200)) {
                 heatMapImage.draw(in: NSRect(x: 36, y: yPosition - 200,
                                            width: pageSize.width - 72, height: 200))
                 yPosition -= 224

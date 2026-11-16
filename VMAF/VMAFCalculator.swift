@@ -8,7 +8,6 @@
 
 import Foundation
 import AVFoundation
-import Charts
 
 class VMAFCalculator {
     struct VMAFResult {

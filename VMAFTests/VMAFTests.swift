@@ -227,3 +227,347 @@ struct ExportTests {
     }
 
 }
+
+// MARK: - Heat map
+
+/// The heat map replaced the line graph, so these cover the behaviour the plot
+/// depends on: absolute colour bands, viewport-sized level of detail, clean
+/// axis strides, and pan/zoom that cannot escape the clip.
+struct QualityTimelineTests {
+    private func frames(_ scores: [Double]) -> [VMAFCalculator.FrameMetric] {
+        scores.enumerated().map { index, score in
+            VMAFCalculator.FrameMetric(
+                frameNumber: index + 1, vmafScore: score,
+                integerMotion: 4.0, integerMotion2: nil, integerAdm2: 0.95,
+                integerAdmScales: [0.9, 0.9, 0.9, 0.9],
+                integerVifScales: [0.9, 0.9, 0.9, 0.9])
+        }
+    }
+
+    @Test func bandsAreAbsoluteNotClipRelative() {
+        // CA-07: 99.1 must not read as "poor" just because it is a clip minimum.
+        #expect(QualityBand(vmafScore: 99.1) == .excellent)
+        #expect(QualityBand(vmafScore: 95.0) == .good)
+        #expect(QualityBand(vmafScore: 94.9) == .fair)
+        #expect(QualityBand(vmafScore: 89.99) == .poor)
+        // The same score is the same colour no matter which result it came from.
+        #expect(QualityScale.rgb(at: 99.1) == QualityScale.rgb(at: 99.1))
+    }
+
+    @Test func colorRampStaysInsideTheScoreDomain() {
+        // Regression: normalizing against a clip's min/max divided by zero when
+        // every frame scored the same, and fell through to "excellent".
+        let low = QualityScale.rgb(at: 0)
+        let high = QualityScale.rgb(at: 100)
+        #expect(low != high)
+        // The ramp heats up as quality improves: red drains away monotonically,
+        // and green climbs through Poor→Fair→Good (then eases toward teal at a
+        // perfect 100, which is a colour decision, not an ordering bug).
+        let poor = QualityScale.rgb(at: 85)
+        let fair = QualityScale.rgb(at: 92.5)
+        let good = QualityScale.rgb(at: 97)
+        let excellent = QualityScale.rgb(at: 99.8)
+        #expect(poor.red > fair.red || abs(poor.red - fair.red) < 0.1)
+        #expect(fair.red > good.red && good.red > excellent.red)
+        #expect(poor.green < fair.green && fair.green < good.green)
+        // Every band gets its own colour: four distinct samples, no ties.
+        let sampled = [poor, fair, good, excellent]
+        #expect(Set(sampled).count == sampled.count)
+    }
+
+    @Test func constantClipGetsNonZeroScoreRange() {
+        let flat = QualityTimeline(metrics: frames(Array(repeating: 97.5, count: 10)))
+        #expect(flat.scoreRange.lowerBound < flat.scoreRange.upperBound)
+        #expect(flat.scoreRange.contains(97.5))
+    }
+
+    @Test func emptyTimelineHasUsableDomains() {
+        let empty = QualityTimeline(metrics: [])
+        #expect(empty.frameCount == 0)
+        #expect(empty.scoreRange.lowerBound < empty.scoreRange.upperBound)
+        #expect(empty.worstIndex == nil)
+        #expect(empty.nearestIndex(for: 3) == nil)
+        #expect(empty.slice(covering: 0...10).isEmpty)
+        #expect(empty.buckets(count: 100, covering: 0...10).isEmpty)
+    }
+
+    @Test func bucketsPreserveExactMinAndMaxAndCoverEveryFrame() {
+        // 30 fps, 3,000 frames, one deliberate dip: a wide view must not lose it.
+        var scores = (0..<3000).map { 95.0 + Double($0 % 5) }
+        scores[1500] = 42.0
+        let timeline = QualityTimeline(metrics: frames(scores))
+        let domain = timeline.timeRange
+        let buckets = timeline.buckets(count: 200, covering: domain)
+
+        #expect(!buckets.isEmpty)
+        #expect(buckets.count <= 200)
+        #expect(buckets.map(\.minScore).min() == 42.0)
+        #expect(buckets.map(\.maxScore).max() == 99.0)
+        // Every frame lands in exactly one bucket, and totals add up.
+        #expect(buckets.reduce(0) { $0 + $1.frameCount } == scores.count)
+        for (left, right) in zip(buckets, buckets.dropFirst()) {
+            #expect(right.startIndex == left.endIndex)
+            #expect(right.startTime >= left.endTime - 0.0001)
+        }
+    }
+
+    @Test func gridCountsEveryVisibleFrameOnce() {
+        let timeline = QualityTimeline(metrics: frames((0..<1000).map { 90.0 + Double($0 % 100) / 10.0 }))
+        let domain = timeline.timeRange
+        let grid = timeline.grid(columns: 300, bins: 60, domain: domain, scoreDomain: 90...100)
+        #expect(grid.cells.reduce(0) { $0 + $1.count } == 1000)
+        #expect(grid.maxCount >= 1)
+        // Cells never invent rows outside the grid.
+        #expect(grid.cells.allSatisfy { $0.bin >= 0 && $0.bin < grid.bins })
+    }
+
+    @Test func nearestIndexMatchesLinearSearch() {
+        let timeline = QualityTimeline(metrics: frames((0..<5000).map { 95.0 + Double($0 % 40) / 10.0 }))
+        for probe in stride(from: 0.0, through: 166.6, by: 0.37) {
+            let fast = timeline.nearestIndex(for: probe)
+            let slow = (0..<5000).min {
+                abs(timeline.time(at: $0) - probe) < abs(timeline.time(at: $1) - probe)
+            }
+            #expect(fast == slow, "nearestIndex disagreed with linear scan at \(probe)s")
+        }
+    }
+
+    @Test func nonMonotonicTimesStillResolve() {
+        // Sampling can emit out-of-order frames; the plot must not crash or
+        // silently pick a wrong index.
+        var built = frames((0..<200).map { _ in 96.0 })
+        built[40] = VMAFCalculator.FrameMetric(frameNumber: 5, vmafScore: 80.0, integerMotion: nil,
+            integerMotion2: nil, integerAdm2: 0.9, integerAdmScales: [0.9,0.9,0.9,0.9], integerVifScales: [0.9,0.9,0.9,0.9])
+        let timeline = QualityTimeline(metrics: built)
+        #expect(!timeline.isTimeMonotonic)
+        #expect(timeline.nearestIndex(for: timeline.time(at: 5)) != nil)
+        #expect(timeline.buckets(count: 50, covering: timeline.timeRange).reduce(0) { $0 + $1.frameCount } >= 1)
+    }
+
+    @Test func bandRunStopsAtABetterFrame() {
+        // Excellent frames surround a Good stretch: the run is the stretch, and
+        // an excellent frame has no concern interval to escalate.
+        var scores = [Double](repeating: 99.5, count: 30)
+        for index in 10...19 { scores[index] = 96.0 }
+        let timeline = QualityTimeline(metrics: frames(scores))
+        #expect(timeline.bandRun(containing: 12) == 10...19)
+        #expect(timeline.bandRun(containing: 0) == nil)
+
+        // A dip inside a worse stretch extends only through the worse part.
+        // Each band reports its own extent, and a worse frame inside it widens
+        // the interval of the shoulder band but not of the worst band.
+        var graded = [Double](repeating: 99.0, count: 20)
+        graded[5] = 91.0   // Fair
+        graded[6] = 85.0   // Poor
+        graded[7] = 92.0   // Fair
+        let mixed = QualityTimeline(metrics: frames(graded))
+        #expect(mixed.bandRun(containing: 5) == 5...7)   // Fair-or-worse stretch
+        #expect(mixed.bandRun(containing: 6) == 6...6)   // the Poor frame alone
+        #expect(mixed.bandRun(containing: 7) == 5...7)
+    }
+
+    @Test func detailLevelDowngradesAsFramesPerPixelGrow() {
+        #expect(QualityTimeline.detailLevel(framesPerPixel: 0.1) == .exactFrames)
+        #expect(QualityTimeline.detailLevel(framesPerPixel: 1.0) == .exactFrames)
+        #expect(QualityTimeline.detailLevel(framesPerPixel: 3) == .density)
+        #expect(QualityTimeline.detailLevel(framesPerPixel: 24) == .density)
+        #expect(QualityTimeline.detailLevel(framesPerPixel: 100) == .envelope)
+        // Plotted marks therefore stay bounded by the viewport, not the clip.
+        let columns = QualityTimeline.densityColumns(width: 1000)
+        #expect(columns == 500)
+    }
+
+    @Test func timeAxisNeverLabelsEverySecond() {
+        // 2,786 one-second labels is the cluttered axis being fixed.
+        let wide = 0...2786.0
+        let ticks = TimeAxis.ticks(in: wide, width: 1350)
+        #expect(ticks.values.count <= 20)
+        #expect(ticks.spacing >= 60)
+        // Ticks are whole multiples of their stride and inside the window.
+        for tick in ticks.values {
+            #expect(abs(tick / ticks.spacing - (tick / ticks.spacing).rounded()) < 0.0001)
+            #expect(tick >= wide.lowerBound && tick <= wide.upperBound)
+        }
+
+        let narrow = TimeAxis.ticks(in: 12.0...13.0, width: 1350)
+        #expect(narrow.spacing < 1)
+        #expect(!narrow.values.isEmpty)
+        // Sub-second ticks stay distinguishable in the label.
+        #expect(Set(narrow.values.map { TimeFormat.string($0, spacing: narrow.spacing) }).count == narrow.values.count)
+    }
+
+    @Test func scoreAxisUsesRoundNumbers() {
+        let full = ScoreAxis.ticks(in: 0...100, height: 300)
+        #expect(full.values.allSatisfy { $0 == $0.rounded() })
+        #expect(full.values.first == 0)
+        #expect(full.values.last == 100)
+        #expect(full.values.count <= 16)
+
+        let fine = ScoreAxis.ticks(in: 96.3...97.1, height: 300)
+        #expect(fine.spacing < 1)
+        #expect(fine.values.count > 2)
+        // Labels carry enough digits to tell adjacent ticks apart.
+        #expect(Set(fine.values.map(fine.label)).count == fine.values.count)
+    }
+
+    @Test func timeFormatCoversHoursAndFractions() {
+        #expect(TimeFormat.string(65, spacing: 5) == "1:05")
+        #expect(TimeFormat.string(3725, spacing: 60) == "1:02:05")
+        #expect(TimeFormat.string(21.5, spacing: 0.5) == "0:21.5")
+        #expect(TimeFormat.string(21.0, spacing: 0.5) == "0:21")
+        #expect(TimeFormat.string(23.7, spacing: 0.1) == "0:23.7")
+    }
+
+    @Test func durationsAndFrameTimesReadAsQuantities() {
+        // A 0.77-second clip used to report "· 0:00", which looks like a
+        // position rather than a length.
+        #expect(TimeFormat.duration(0.766_6) == "0.77s")
+        #expect(TimeFormat.duration(12.34) == "12.3s")
+        #expect(TimeFormat.duration(2786) == "46:26")
+        // Frame times need the millisecond the old "%.1f" truncated.
+        #expect(TimeFormat.exact(0.766_6) == "0:00.767")
+        #expect(TimeFormat.exact(65.5) == "1:05.500")
+        #expect(TimeFormat.exact(3725.25) == "1:02:05.250")
+        // The app's known negative first timestamp stays well-formed.
+        #expect(TimeFormat.exact(-0.0333) == "-0:00.033")
+    }
+}
+
+@MainActor
+struct HeatmapViewportTests {
+    private func frames(_ count: Int) -> [VMAFCalculator.FrameMetric] {
+        (1...count).map { index in
+            VMAFCalculator.FrameMetric(
+                frameNumber: index, vmafScore: 95.0 + Double(index % 5),
+                integerMotion: nil, integerMotion2: nil, integerAdm2: 0.95,
+                integerAdmScales: [0.9, 0.9, 0.9, 0.9],
+                integerVifScales: [0.9, 0.9, 0.9, 0.9])
+        }
+    }
+
+    private let geometry = ChartGeometry(size: CGSize(width: 1350, height: 300))
+
+    @Test func defaultWindowShowsTheWholeClip() {
+        let timeline = QualityTimeline(metrics: frames(1439))
+        let viewport = HeatmapViewport()
+        #expect(!viewport.isZoomed)
+        #expect(viewport.displayDomain(in: timeline, geometry: geometry) == timeline.timeRange)
+    }
+
+    @Test func zoomKeepsTheAnchorPixelStill() {
+        let timeline = QualityTimeline(metrics: frames(1439))
+        let viewport = HeatmapViewport()
+        let anchor = 1000.0 / 30.0
+        let before = geometry.x(for: anchor, domain: viewport.displayDomain(in: timeline, geometry: geometry))
+        viewport.zoom(by: 8, around: anchor, in: timeline, geometry: geometry)
+        let after = geometry.x(for: anchor, domain: viewport.displayDomain(in: timeline, geometry: geometry))
+        #expect(abs(after - before) < 0.5, "zoom slid the anchor across the plot")
+        #expect(viewport.zoom > 7.9)
+    }
+
+    @Test func windowCannotBeDraggedPastEitherEnd() {
+        let timeline = QualityTimeline(metrics: frames(1439))
+        let viewport = HeatmapViewport()
+        viewport.setZoom(64, in: timeline, geometry: geometry)
+        // `drag` takes the gesture's cumulative translation from its origin.
+        viewport.beginDrag()
+        // A ~0.75s window across ~47s of clip needs a very long drag to reach
+        // the end; 1M px overshoots, and the clamp must absorb it.
+        viewport.drag(byPixels: -1_000_000, in: timeline, geometry: geometry)
+        viewport.endDrag()
+        var domain = viewport.displayDomain(in: timeline, geometry: geometry)
+        #expect(domain.upperBound <= timeline.timeRange.upperBound + 0.001)
+        // Division by the zoom factor is not exact, so the end is reached to
+        // within float dust rather than bit-for-bit.
+        #expect(abs(domain.upperBound - timeline.timeRange.upperBound) < 0.0001)
+
+        viewport.beginDrag()
+        viewport.drag(byPixels: 1_000_000, in: timeline, geometry: geometry)
+        viewport.endDrag()
+        domain = viewport.displayDomain(in: timeline, geometry: geometry)
+        #expect(domain.lowerBound >= timeline.timeRange.lowerBound - 0.001)
+        #expect(abs(domain.lowerBound - timeline.timeRange.lowerBound) < 0.0001)
+    }
+
+    @Test func windowLengthSurvivesPanningAtFixedZoom() {
+        let timeline = QualityTimeline(metrics: frames(1439))
+        let viewport = HeatmapViewport()
+        viewport.setZoom(16, in: timeline, geometry: geometry)
+        let before = viewport.displayDomain(in: timeline, geometry: geometry)
+        viewport.pan(byPixels: -400, in: timeline, geometry: geometry)
+        let after = viewport.displayDomain(in: timeline, geometry: geometry)
+        #expect(abs((after.upperBound - after.lowerBound) - (before.upperBound - before.lowerBound)) < 0.001)
+    }
+
+    @Test func zoomIsBoundedByWhatFramesCanBeShown() {
+        let timeline = QualityTimeline(metrics: frames(1439))
+        let viewport = HeatmapViewport()
+        viewport.setZoom(1_000_000, in: timeline, geometry: geometry)
+        #expect(viewport.zoom == viewport.maximumZoom(in: timeline, geometry: geometry))
+        let domain = viewport.displayDomain(in: timeline, geometry: geometry)
+        // The finest window still shows a hoverable handful of frames.
+        #expect(timeline.slice(covering: domain).count >= 2)
+    }
+
+    @Test func degenerateAndEmptyResultsStayFinite() {
+        let viewport = HeatmapViewport()
+        #expect(viewport.displayDomain(in: QualityTimeline(metrics: []), geometry: geometry).lowerBound.isFinite)
+        #expect(viewport.scoreDomain(in: QualityTimeline(metrics: [])).lowerBound.isFinite)
+
+        let single = QualityTimeline(metrics: frames(1))
+        let domain = viewport.displayDomain(in: single, geometry: geometry)
+        #expect(domain.upperBound > domain.lowerBound)
+        #expect(!viewport.isZoomed)
+
+        let flat = QualityTimeline(metrics: QualityTimelineTestsFrames.constant(200, score: 97.5))
+        let scores = viewport.scoreDomain(in: flat)
+        #expect(scores.upperBound > scores.lowerBound)
+        #expect(scores.contains(97.5))
+    }
+
+    @Test func autoRangeRevealsANarrowBandButStaysAbsolute() {
+        // 93.75...100 spread over the full plot height instead of 6% of it.
+        let timeline = QualityTimeline(metrics: QualityTimelineTestsFrames.ramp)
+        let viewport = HeatmapViewport()
+        let auto = viewport.scoreDomain(in: timeline)
+        #expect(auto.lowerBound < timeline.scoreRange.lowerBound)
+        #expect(auto.upperBound > timeline.scoreRange.upperBound)
+        #expect(auto.upperBound - auto.lowerBound < 10)
+        viewport.verticalScale = .full
+        #expect(viewport.scoreDomain(in: timeline) == 0...100)
+    }
+
+    @Test func focusCentresTheWorstFrameInsideTheWindow() {
+        guard let worst = QualityTimeline(metrics: QualityTimelineTestsFrames.ramp).worstIndex else {
+            Issue.record("ramp fixture should have a worst frame"); return
+        }
+        let timeline = QualityTimeline(metrics: QualityTimelineTestsFrames.ramp)
+        let viewport = HeatmapViewport()
+        viewport.focus(onIndex: worst, in: timeline, geometry: geometry)
+        let domain = viewport.displayDomain(in: timeline, geometry: geometry)
+        #expect(domain.contains(timeline.time(at: worst)))
+        #expect(viewport.isZoomed)
+    }
+}
+
+/// Shared fixtures for the viewport tests above.
+enum QualityTimelineTestsFrames {
+    static func constant(_ count: Int, score: Double) -> [VMAFCalculator.FrameMetric] {
+        (1...count).map { index in
+            VMAFCalculator.FrameMetric(frameNumber: index, vmafScore: score, integerMotion: 4,
+                integerMotion2: nil, integerAdm2: 0.95,
+                integerAdmScales: [0.9, 0.9, 0.9, 0.9], integerVifScales: [0.9, 0.9, 0.9, 0.9])
+        }
+    }
+
+    /// The real-world case from the bug report: a good encode whose frames sit
+    /// between 93.75 and 100, so a 0-100 axis hides every difference.
+    static var ramp: [VMAFCalculator.FrameMetric] {
+        (0..<1439).map { index in
+            let score = 93.75 + (Double(index % 187) / 186.0) * 6.25
+            return VMAFCalculator.FrameMetric(frameNumber: index + 1, vmafScore: min(100, score),
+                integerMotion: 4.0, integerMotion2: nil, integerAdm2: 0.95,
+                integerAdmScales: [0.9, 0.9, 0.9, 0.9], integerVifScales: [0.9, 0.9, 0.9, 0.9])
+        }
+    }
+}

@@ -26,9 +26,9 @@ struct ExportOptionsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Include Frame Data", isOn: $options.includeFrameData)
                     Toggle("Include Aggregate Metrics", isOn: $options.includeAggregateMetrics)
-                    Toggle("Include Graphs", isOn: .init(
-                        get: { selectedFormat == .pdf ? options.includeGraphs : false },
-                        set: { options.includeGraphs = $0 }
+                    Toggle("Include Heat Map", isOn: .init(
+                        get: { selectedFormat == .pdf ? options.includeVisualization : false },
+                        set: { options.includeVisualization = $0 }
                     ))
                     .disabled(selectedFormat != .pdf)
                 }

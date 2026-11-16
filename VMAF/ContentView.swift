@@ -35,8 +35,8 @@ struct VMAFView: View {
     @State private var errorDetails: String?
     @State private var showErrorDetails = false
     @State private var ffmpegExitStatus: Int32?
-    @State private var showGraph = false  // Graph hidden by default
-    @State private var visualizationType: VisualizationType = .line
+    @State private var showHeatMap = false  // Visualization hidden by default
+    @State private var frameTimeline: QualityTimeline?
     @State private var showExportOptions = false
     
     // New state variables for progress display
@@ -48,11 +48,6 @@ struct VMAFView: View {
     @State private var ffmpegCommand: String = ""
     
     private let calculator = VMAFCalculator()
-    
-    enum VisualizationType {
-        case line
-        case heatmap
-    }
     
     var body: some View {
         VStack(spacing: 16) {
@@ -187,51 +182,23 @@ struct VMAFView: View {
                                 Text("Results")
                                     .font(.headline)
                                     .foregroundColor(.secondary)
-                                
+
                                 Spacer()
-                                
+
                                 HStack(spacing: 8) {
-                                    Button(action: {
-                                        if showGraph && visualizationType == .line {
-                                            // If this button is active, deactivate it
-                                            showGraph = false
-                                        } else {
-                                            // Activate this button and deactivate the other
-                                            showGraph = true
-                                            visualizationType = .line
-                                        }
-                                    }) {
-                                        Label("Show Graph", systemImage: "chart.xyaxis.line")
-                                    }
-                                    .buttonStyle(.plain)
-                                    .padding(6)
-                                    .background(showGraph && visualizationType == .line ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
-                                    .foregroundColor(showGraph && visualizationType == .line ? .white : .primary)
-                                    .cornerRadius(6)
-                                    .controlSize(.small)
-                                    
-                                    Button(action: {
-                                        if showGraph && visualizationType == .heatmap {
-                                            // If this button is active, deactivate it
-                                            showGraph = false
-                                        } else {
-                                            // Activate this button and deactivate the other
-                                            showGraph = true
-                                            visualizationType = .heatmap
-                                        }
-                                    }) {
+                                    Button(action: { showHeatMap.toggle() }) {
                                         Label("Show Heat Map", systemImage: "chart.bar.fill")
                                     }
                                     .buttonStyle(.plain)
                                     .padding(6)
-                                    .background(showGraph && visualizationType == .heatmap ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
-                                    .foregroundColor(showGraph && visualizationType == .heatmap ? .white : .primary)
+                                    .background(showHeatMap ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+                                    .foregroundColor(showHeatMap ? .white : .primary)
                                     .cornerRadius(6)
                                     .controlSize(.small)
-                                    
+
                                     Divider()
                                         .frame(height: 16)
-                                    
+
                                     Button(action: { showExportOptions = true }) {
                                         Label("Export", systemImage: "square.and.arrow.up")
                                     }
@@ -242,22 +209,18 @@ struct VMAFView: View {
                                     .controlSize(.small)
                                 }
                             }
-                            
+
                             VStack(alignment: .leading, spacing: 12) {
                                 ResultRow(title: "VMAF Score", value: result.score)
                                 ResultRow(title: "Range", value: "\(String(format: "%.2f", result.minScore)) to \(String(format: "%.2f", result.maxScore))")
                                 ResultRow(title: "Harmonic Mean", value: result.harmonicMean)
                             }
-                            
-                            // Graph View (only shown when toggled)
-                            if showGraph {
-                                if visualizationType == .line {
-                                    VMAFGraphView(frameMetrics: result.frameMetrics)
-                                        .frame(minHeight: 300, maxHeight: 500)
-                                } else {
-                                    HeatMapView(frameMetrics: result.frameMetrics)
-                                        .frame(minHeight: 300, maxHeight: 500)
-                                }
+
+                            // The heat map is the quality-over-time view; the
+                            // line graph showed the same data less legibly.
+                            if showHeatMap, let timeline = frameTimeline {
+                                HeatMapView(timeline: timeline)
+                                    .frame(minHeight: 320, maxHeight: 520)
                             }
                         }
                         .padding()
@@ -381,8 +344,14 @@ struct VMAFView: View {
                     referenceVideo: reference,
                     comparisonVideo: comparison
                 )
+                // The per-frame summary is O(frames); keep it off the main actor
+                // so the first heat map render does not stall the UI.
+                let timeline = await Task.detached(priority: .userInitiated) {
+                    QualityTimeline(metrics: result.frameMetrics)
+                }.value
                 await MainActor.run {
                     self.vmafResult = result
+                    self.frameTimeline = timeline
                     self.isCalculating = false
                     // Make sure we have the command even after calculation completes
                     self.ffmpegCommand = calculator.getLastCommand()
