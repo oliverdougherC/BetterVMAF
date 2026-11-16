@@ -49,6 +49,32 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
+      # Guard the macOS 28 Rosetta fix: the app must ship a native arm64 helper and a
+      # matching Intel helper, and must not reintroduce an Intel-only engine that would
+      # force Apple Silicon analysis through Rosetta. See docs/ENGINE_PROVENANCE.md.
+      - name: Verify bundled engine architectures
+        run: |
+          set -euo pipefail
+          RES="build/DerivedData/Build/Products/Release/Better VMAF.app/Contents/Resources"
+          test -f "$RES/ffmpeg" && test -x "$RES/ffmpeg"
+          test -f "$RES/ffmpeg.x86_64" && test -x "$RES/ffmpeg.x86_64"
+          echo "ffmpeg:        $(lipo -archs "$RES/ffmpeg")"
+          echo "ffmpeg.x86_64: $(lipo -archs "$RES/ffmpeg.x86_64")"
+          [ "$(lipo -archs "$RES/ffmpeg")" = "arm64" ] || { echo "bundled arm64 helper is missing or not thin arm64"; exit 1; }
+          [ "$(lipo -archs "$RES/ffmpeg.x86_64")" = "x86_64" ] || { echo "Intel helper is missing or not thin x86_64"; exit 1; }
+          # No Mach-O may be Intel-only except the explicitly named Intel helper.
+          APP="build/DerivedData/Build/Products/Release/Better VMAF.app"
+          while IFS= read -r -d '' bin; do
+            file "$bin" | grep -q 'Mach-O' || continue
+            case "$bin" in
+              *"$RES/ffmpeg.x86_64") continue ;;
+            esac
+            if ! lipo -archs "$bin" 2>/dev/null | grep -q arm64; then
+              echo "Intel-only Mach-O in bundle forces Rosetta on Apple Silicon: $bin"; exit 1
+            fi
+          done < <(find "$APP" -type f -print0)
+          echo "Engine architecture guard passed."
+
       # These currently exercise the Xcode template and app launch only.
       # Passing CI does not establish metric or comparison correctness.
       - name: Run unit and UI tests

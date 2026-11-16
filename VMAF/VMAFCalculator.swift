@@ -76,7 +76,11 @@ class VMAFCalculator {
             
             let metricsContainer = try container.nestedContainer(keyedBy: MetricsCodingKeys.self, forKey: .metrics)
             vmafScore = try metricsContainer.decode(Double.self, forKey: .vmaf)
-            integerMotion = try metricsContainer.decode(Double.self, forKey: .integerMotion)
+            // libvmaf 2.x emits `integer_motion`; libvmaf 3.x renamed the feature and emits
+            // only `integer_motion2`/`integer_motion3`. Accept either spelling so results from
+            // both engines decode, preferring the legacy key when present.
+            integerMotion = try metricsContainer.decodeIfPresent(Double.self, forKey: .integerMotion)
+                ?? metricsContainer.decode(Double.self, forKey: .integerMotion2)
             integerMotion2 = try metricsContainer.decode(Double.self, forKey: .integerMotion2)
             integerAdm2 = try metricsContainer.decode(Double.self, forKey: .integerAdm2)
             
@@ -248,34 +252,9 @@ class VMAFCalculator {
     }
     
     init() {
-        // Get the path to ffmpeg in the app bundle
-        if let bundlePath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) {
-            ffmpegPath = bundlePath
-            print("Using bundled ffmpeg at path: \(bundlePath)")
-            
-            // Make the binary executable - note that in a sandboxed app, we can't modify permissions
-            // We need to rely on the app being properly code signed with the ffmpeg executable
-            // already having the proper permissions set during the build process
-            
-            // Check if the file is executable
-            var isExecutable = false
-            let fileManager = FileManager.default
-            if let attributes = try? fileManager.attributesOfItem(atPath: bundlePath),
-               let posixPermissions = attributes[.posixPermissions] as? NSNumber {
-                let permissions = posixPermissions.intValue
-                isExecutable = (permissions & 0o111) != 0 // Check if any execute bit is set
-            }
-            
-            if !isExecutable {
-                print("Warning: ffmpeg does not have executable permissions. Using alternative approach.")
-                // Instead of trying to chmod, we'll try to use the executable through a different mechanism
-                // or fallback to system ffmpeg
-            }
-        } else {
-            // Fallback to system ffmpeg if not found in bundle
-            ffmpegPath = "/opt/homebrew/bin/ffmpeg"
-            print("Warning: Using system ffmpeg at path: \(ffmpegPath)")
-        }
+        ffmpegPath = EngineHelper.resolvePath(bundle: .main)
+            ?? EngineHelper.fallbackSystemPath
+        print("Using ffmpeg at path: \(ffmpegPath)")
     }
     
     func calculateVMAF(referenceVideo: URL, comparisonVideo: URL) async throws -> VMAFResult {

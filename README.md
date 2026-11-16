@@ -18,7 +18,7 @@ The current “heat map” is a colored score chart over time, not a spatial map
 
 Download a DMG from [GitHub Releases](https://github.com/oliverdougherC/BetterVMAF/releases) and drag **Better VMAF** into Applications. Existing releases are not Developer ID signed; macOS may require opening the app through **System Settings → Privacy & Security**.
 
-The current source project targets **macOS 15.2 or later**. Older release assets may differ. The checked-in FFmpeg executable is **Intel x86_64**, so its execution on Apple Silicon currently requires Rosetta. A native Apple Silicon engine is a high-priority roadmap item.
+The current source project targets **macOS 15.2 or later**. Older release assets may differ. The bundled FFmpeg engine ships separate native **arm64** and **x86_64** binaries and launches the one matching your Mac, so analysis runs natively on Apple Silicon without Rosetta and continues to run on Intel Macs. See [engine provenance](docs/ENGINE_PROVENANCE.md) for the pinned builds and checksums.
 
 ## Understand the result
 

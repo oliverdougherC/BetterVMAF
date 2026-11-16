@@ -1,0 +1,76 @@
+# Bundled engine provenance
+
+Better VMAF ships its FFmpeg/libvmaf engine inside the app bundle. This file records
+exactly which binaries are checked in, where they came from, and how they were verified,
+so a release can be reproduced and Intel execution is never reintroduced by accident.
+
+## Current engine (2026-11-16)
+
+Two **thin** binaries replace the previous single Intel-only build. The app picks the one
+matching the host CPU at launch (see `VMAF/EngineHelper.swift`), so Apple Silicon never
+starts a Rosetta process and Intel Macs keep working.
+
+| File | Architecture | FFmpeg | libvmaf | SHA-256 |
+| --- | --- | --- | --- | --- |
+| `VMAF/Resources/ffmpeg` | arm64 | 9.0.2 | 3.2.0 | `2e11c6f90993cdb79fff84d3f90044d28316b310e75b3e030cfc9a54f2c9d384` |
+| `VMAF/Resources/ffmpeg.x86_64` | x86_64 | 9.0.2 | 3.2.0 | `b25689cf2211c0582d317e849912769a1f1c93904fe102c485b5364a425633d1` |
+
+- Source: Martin Riedl's FFmpeg Build Server, `https://ffmpeg.martin-riedl.de/`, macOS
+  **release** builds 9.0.2 (`/download/macos/arm64/1789931890_9.0.2/` and
+  `/download/macos/amd64/1789931006_9.0.2/`).
+- Archive SHA-256 as downloaded: arm64 zip `c8ed4c4e6978a03c485edbfe4e0a5dc2380f8a30bba5150531b31b094492d924`,
+  amd64 zip `7c6b4125b191cbf773832dc51f424cf2b6bb7da43007d1e066f95909e47cacd4`. Both matched the
+  server's published `ffmpeg.zip.sha256`.
+- Build configuration (identical for both slices): `--enable-gpl --enable-version3
+  --enable-libvmaf --enable-libx264 --enable-libx265 --enable-libaom --enable-libdav1d
+  --enable-libwebp --enable-libzimg` (static, `--pkg-config-flags=--static`). `minos 12.0`.
+- Code signature: `Developer ID Application: Martin Riedl (KU3N25YGLU)`, hardened runtime,
+  timestamped. Xcode's copy phase preserves this signature; the app must not re-sign the
+  helpers with a different identity, and notarization must cover both.
+- Why not a single universal binary: it is 161 MB, over GitHub's 100 MB per-file limit for
+  non-LFS content, and the Intel slice is dead weight (95 MB) on every Apple Silicon install.
+  Two thin files keep every blob under the limit and make the launch choice explicit.
+
+## Previous engine (replaced)
+
+`VMAF/Resources/ffmpeg` was **x86_64-only**, `ffmpeg 8.0.1-tessus` from `https://evermeet.cx/ffmpeg/`
+(SHA-256 of that file `430d60fbf419dab28daee9b679e7929a31ee9bae53f6e42e8ae26b725584290f`,
+`LC_VERSION_MIN_MACOSX 10.12`). evermeet.cx does not publish Apple Silicon builds, so every
+analysis ran the Intel helper under Rosetta. macOS flagged the bundle with "includes a component
+that will not open in macOS 28", and Intel execution ends at macOS 28.
+
+## Score parity check
+
+The replacement was validated against the old pinned engine on a deterministic fixture
+(`testsrc2` 320x180@24, 4 s, encoded CRF 18 reference and CRF 40 comparison), using the exact
+`libvmaf=model=path=<vmaf_v0.6.1.json>:log_fmt=json:n_threads=99` graph the app builds:
+
+- Old engine (8.0.1-tessus): mean 67.8460, min 58.9359, max 74.0485.
+- New engine (9.0.2): mean 67.8454, min 58.9358, max 74.0483.
+- Same 96 frames; maximum per-frame VMAF delta 0.028. Scores are model-for-model equal within
+  encoder-thread noise; the app's stored model files are unchanged.
+
+libvmaf 3.2.0 renamed the `integer_motion` feature to per-scale `integer_motion2`/`integer_motion3`
+and it cannot be requested under the old name. The app previously decoded `integer_motion`
+strictly, which would have failed every analysis on the new engine. `VMAFCalculator.FrameMetric`
+now accepts either spelling, falling back to `integer_motion2`. This is a **metric identity change**
+for the "Motion" column: it is no longer the libvmaf 2.x `integer_motion` value. The old name is kept
+in the UI/export for continuity, but the two engines' Motion values are not directly comparable and
+must not be ranked together. Confirm against a fixture before publishing side-by-side comparisons.
+
+## Reproducing the download
+
+```bash
+# arm64
+curl -L https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffmpeg.zip -o ffmpeg-arm64.zip
+shasum -a256 ffmpeg-arm64.zip   # expect c8ed4c4e... (verify against the server's .sha256 at download time)
+ditto -x -k ffmpeg-arm64.zip out-arm64/ && cp out-arm64/ffmpeg VMAF/Resources/ffmpeg
+# amd64
+curl -L https://ffmpeg.martin-riedl.de/download/macos/amd64/1789931006_9.0.2/ffmpeg.zip -o ffmpeg-amd64.zip
+shasum -a256 ffmpeg-amd64.zip   # expect 7c6b4125...
+ditto -x -k ffmpeg-amd64.zip out-amd64/ && cp out-amd64/ffmpeg VMAF/Resources/ffmpeg.x86_64
+chmod 755 VMAF/Resources/ffmpeg VMAF/Resources/ffmpeg.x86_64
+```
+
+The server rotates "latest release" build directories; pin the two directory names above rather
+than following `/redirect/latest/...` for a reproducible re-download.
