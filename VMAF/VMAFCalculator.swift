@@ -565,7 +565,7 @@ class VMAFCalculator {
 
 // MARK: - Supporting Types
 extension VMAFCalculator {
-    enum VMAFError: Error {
+    enum VMAFError: LocalizedError {
         case missingMetrics
         case ffmpegError(String)
         case permissionDenied
@@ -581,7 +581,12 @@ extension VMAFCalculator {
         case missingVideoTrack
         case engineUnavailable(EngineHelper.Problem)
         
-        var localizedDescription: String {
+        // Must be `errorDescription`, not `localizedDescription`: the UI catches
+        // these as `Error`, and Foundation only bridges to `LocalizedError`'s
+        // `errorDescription` there. A same-named stored-ish member on the enum
+        // is invisible through that protocol witness and users would get the
+        // generic "The operation couldn’t be completed" fallback.
+        var errorDescription: String? {
             switch self {
             case .missingMetrics:
                 return "VMAF metrics could not be found in the output"

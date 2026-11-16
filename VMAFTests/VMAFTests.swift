@@ -5,6 +5,7 @@
 //  Created by Oliver Dougherty on 3/4/25.
 //
 
+import AppKit
 import Foundation
 import Testing
 @testable import VMAF
@@ -129,6 +130,90 @@ struct VMAFTests {
         let json = "{\"frames\":[{\"frameNum\":0,\"metrics\":{\"vmaf\":67.5,\"integer_adm2\":0.93,\"integer_adm_scale0\":0.87,\"integer_adm_scale1\":0.91,\"integer_adm_scale2\":0.92,\"integer_adm_scale3\":0.97,\"integer_vif_scale0\":0.4,\"integer_vif_scale1\":0.6,\"integer_vif_scale2\":0.7,\"integer_vif_scale3\":0.8}}],\"pooled_metrics\":{\"vmaf\":{\"min\":58.9,\"max\":74.0,\"mean\":67.8,\"harmonic_mean\":67.7}},\"aggregate_metrics\":{}}"
         let data = try JSONDecoder().decode(VMAFCalculator.VMAFData.self, from: Data(json.utf8))
         #expect(data.frames.first?.motionReading == nil)
+    }
+
+}
+
+struct ExportTests {
+    private func frame(_ n: Int, motion: Double?, motion2: Double?) -> VMAFCalculator.FrameMetric {
+        VMAFCalculator.FrameMetric(
+            frameNumber: n, vmafScore: 60.0 + Double(n),
+            integerMotion: motion, integerMotion2: motion2,
+            integerAdm2: 0.9,
+            integerAdmScales: [0.8, 0.85, 0.9, 0.95],
+            integerVifScales: [0.4, 0.5, 0.6, 0.7])
+    }
+    private func result(_ frames: [VMAFCalculator.FrameMetric], version: String?) -> VMAFCalculator.VMAFResult {
+        VMAFCalculator.VMAFResult(score: 70, minScore: 60, maxScore: 80, harmonicMean: 69,
+                                  frameMetrics: frames, duration: 2, frameCount: frames.count,
+                                  libvmafVersion: version)
+    }
+
+    @Test func csvKeepsUniformColumnsAndParsesBack() throws {
+        let manager = ExportManager()
+        let frames = [frame(1, motion: nil, motion2: 1.5), frame(2, motion: nil, motion2: nil)]
+        let csv = try manager.exportToCSV(result: result(frames, version: "3.2.0"), options: .init())
+        let tableSection = csv.components(separatedBy: "\n\nAggregate Metrics")[0]
+        let records = tableSection.split(separator: "\n", omittingEmptySubsequences: false).filter { !$0.isEmpty }
+        // Header + one record per frame, every record exactly five fields.
+        #expect(records.count == frames.count + 1)
+        for record in records {
+            #expect(record.components(separatedBy: ",").count == 5, "non-uniform CSV record: \(record)")
+        }
+        let header = records[0].components(separatedBy: ",")
+        #expect(header[3] == "Motion (integer_motion2)") // named after the reported feature
+        let row1 = records[1].components(separatedBy: ",")
+        #expect(Double(row1[3]) == 1.5) // round-trips back to the source value
+        let row2 = records[2].components(separatedBy: ",")
+        #expect(row2[3] == "") // absent motion is empty, never a fabricated 0
+        // Provenance sits in its own section, not above the header.
+        #expect(csv.components(separatedBy: "\n").first!.hasPrefix("Frame Number,"))
+        #expect(csv.contains("Version,3.2.0"))
+    }
+
+    @Test func jsonOmitsAbsentMotionInsteadOfZeroFilling() throws {
+        let manager = ExportManager()
+        let frames = [frame(1, motion: nil, motion2: 1.5), frame(2, motion: nil, motion2: nil)]
+        let data = try manager.exportToJSON(result: result(frames, version: "3.2.0"), options: .init())
+        let root = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let outFrames = try #require(root["frames"] as? [[String: Any]])
+        #expect(outFrames.count == 2)
+        let withMotion = outFrames[0]
+        #expect(withMotion["integer_motion2"] as? Double == 1.5)
+        #expect(withMotion["motion"] == nil) // no legacy key invented
+        #expect(withMotion["integer_motion"] == nil)
+        let withoutMotion = outFrames[1]
+        #expect(withoutMotion["motion"] == nil && withoutMotion["integer_motion2"] == nil)
+        // Absent must stay absent: the frame dict carries no fabricated 0.0.
+        #expect(!withoutMotion.values.contains { ($0 as? Double) == 0.0 })
+        let engine = try #require(root["engine"] as? [String: Any])
+        #expect(engine["version"] as? String == "3.2.0")
+    }
+
+    @Test func engineUnavailableReachesUIAsActionableMessage() {
+        // The UI catches `Error` and calls `.localizedDescription`; only the
+        // LocalizedError bridge surfaces the reinstall instruction.
+        let caught: Error = VMAFCalculator.VMAFError.engineUnavailable(.helperMissing)
+        #expect(caught.localizedDescription.contains("Reinstall"))
+        let mismatch: Error = VMAFCalculator.VMAFError.engineUnavailable(.helperArchitectureMismatch(found: ["x86_64"]))
+        #expect(mismatch.localizedDescription.contains("x86_64"))
+        // Other cases must also bridge rather than fall back to Cocoa text.
+        let model: Error = VMAFCalculator.VMAFError.modelNotFound("vmaf_v0.6.1")
+        #expect(model.localizedDescription.contains("vmaf_v0.6.1"))
+    }
+
+    @Test func pdfColumnsWidenToTheLongestHeader() {
+        let font = NSFont.systemFont(ofSize: 12)
+        let widths = PDFGenerator.tableColumnWidths(
+            headers: ["Frame", "Time", "VMAF", "Motion (integer_motion2)", "ADM2"], font: font)
+        #expect(widths.count == 5)
+        #expect(widths[3] > 150) // the long header gets its own space
+        #expect(widths.reduce(0, +) < 612 - 48 - 36) // fits one US Letter page
+        // Every column is at least as wide as its own text plus padding.
+        for (header, width) in zip(["Frame", "Time", "VMAF", "Motion (integer_motion2)", "ADM2"], widths) {
+            let text = (header as NSString).size(withAttributes: [.font: font]).width
+            #expect(width >= text, "\(header) would overflow its \(width)pt column")
+        }
     }
 
 }

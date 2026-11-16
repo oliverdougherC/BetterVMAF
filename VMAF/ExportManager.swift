@@ -33,12 +33,14 @@ class ExportManager {
     }
     
     func exportToCSV(result: VMAFCalculator.VMAFResult, options: ExportOptions) throws -> String {
+        // One uniform table: header and frame records all have five fields so
+        // parsers infer a stable schema; provenance lives in its own trailing
+        // sections instead of a short row above the header.
         // Name the Motion column after the libvmaf feature that produced it;
         // the legacy `integer_motion` and libvmaf 3.x `integer_motion2` are
         // different measurements and must not share an unlabeled column.
-        let motionFeature = result.frameMetrics.first?.motionReading?.feature ?? "integer_motion"
-        var csv = "Engine,libvmaf,\(result.libvmafVersion ?? "unknown")\n"
-        csv += "Frame Number,Timestamp,VMAF Score,Motion (\(motionFeature)),ADM2\n"
+        let motionFeature = result.frameMetrics.lazy.compactMap(\.motionReading?.feature).first ?? ""
+        var csv = "Frame Number,Timestamp,VMAF Score,Motion\(motionFeature.isEmpty ? "" : " (\(motionFeature))"),ADM2\n"
 
         // Add frame-by-frame data if requested
         if options.includeFrameData {
@@ -48,7 +50,7 @@ class ExportManager {
                 csv += row
             }
         }
-        
+
         // Add aggregate metrics if requested
         if options.includeAggregateMetrics {
             csv += "\n\nAggregate Metrics\n"
@@ -56,8 +58,14 @@ class ExportManager {
             csv += "Min Score,\(result.minScore)\n"
             csv += "Max Score,\(result.maxScore)\n"
             csv += "Harmonic Mean,\(result.harmonicMean)\n"
+            csv += "\n\nEngine\n"
+            csv += "Metric,libvmaf\n"
+            csv += "Version,\(result.libvmafVersion ?? "unknown")\n"
+            if !motionFeature.isEmpty {
+                csv += "Motion feature,\(motionFeature)\n"
+            }
         }
-        
+
         return csv
     }
     
@@ -69,15 +77,20 @@ class ExportManager {
         ]
         
         if options.includeFrameData {
-            exportDict["frames"] = result.frameMetrics.map { metric in
-                [
+            exportDict["frames"] = result.frameMetrics.map { metric -> [String: Any] in
+                var frame: [String: Any] = [
                     "frameNumber": metric.frameNumber,
                     "timestamp": metric.timestamp,
                     "vmafScore": metric.vmafScore,
-                    // Key the motion value by its libvmaf feature identity.
-                    (metric.motionReading?.feature ?? "motion"): metric.motionReading?.value ?? 0.0,
                     "adm2": metric.integerAdm2
                 ]
+                // Key the motion value by its libvmaf feature identity, and omit
+                // the feature entirely when the engine did not report it — an
+                // absent measurement is unavailable, never a fabricated 0.0.
+                if let reading = metric.motionReading {
+                    frame[reading.feature] = reading.value
+                }
+                return frame
             }
         }
         

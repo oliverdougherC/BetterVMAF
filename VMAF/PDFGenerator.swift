@@ -65,7 +65,8 @@ class PDFGenerator {
         let summaryData = [
             ("Overall VMAF Score:", String(format: "%.2f", result.score)),
             ("Score Range:", String(format: "%.2f - %.2f", result.minScore, result.maxScore)),
-            ("Harmonic Mean:", String(format: "%.2f", result.harmonicMean))
+            ("Harmonic Mean:", String(format: "%.2f", result.harmonicMean)),
+            ("Engine:", "libvmaf \(result.libvmafVersion ?? "unknown")")
         ]
         
         for (label, value) in summaryData {
@@ -108,9 +109,11 @@ class PDFGenerator {
         
         // Frame data on new pages if needed
         if includeFrameData {
-            let motionFeature = result.frameMetrics.first?.motionReading?.feature ?? "integer_motion"
+            let motionFeature = result.frameMetrics.lazy.compactMap(\.motionReading?.feature).first ?? "integer_motion"
             let headers = ["Frame", "Time", "VMAF", "Motion (\(motionFeature))", "ADM2"]
-            let columnWidths: [CGFloat] = [60, 80, 80, 80, 80]
+            // Width per header text so "Motion (integer_motion2)" cannot spill
+            // into ADM2; fixed [60,80,...] columns overlapped at 12pt bold.
+            let columnWidths: [CGFloat] = Self.tableColumnWidths(headers: headers, font: bodyFont.bold())
             let startX: CGFloat = 48
             
             func createNewPage() -> (NSBitmapImageRep, NSGraphicsContext) {
@@ -197,6 +200,16 @@ class PDFGenerator {
         return pdfDocument.dataRepresentation() ?? Data()
     }
     
+    /// Table column widths sized to the header text (with padding), floored at
+    /// 60pt, so no header can overlap its neighbor regardless of feature name.
+    static func tableColumnWidths(headers: [String], font: NSFont) -> [CGFloat] {
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+        return headers.map { header in
+            let width = (header as NSString).size(withAttributes: attributes).width
+            return max(60, ceil(width) + 16)
+        }
+    }
+
     private static func drawText(_ text: String, at point: NSPoint, font: NSFont) {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
