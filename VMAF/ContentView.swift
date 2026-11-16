@@ -144,21 +144,26 @@ struct VMAFView: View {
                             ProgressView(value: progress > 0 ? progress / 100 : nil)
                                 .progressViewStyle(.linear)
                             
-                            HStack {
-                                if let total = totalFrames, total > 0 {
-                                    Text("Progress: Frame \(currentFrame) of \(total)")
-                                        .foregroundColor(.secondary)
-                                    Spacer()
-                                    let percent = min(100, max(0, Double(currentFrame) / Double(total) * 100))
-                                    Text(String(format: "%.1f%%", percent))
-                                        .foregroundColor(.secondary)
-                                } else {
-                                    Text("Progress: Frame \(currentFrame)")
-                                        .foregroundColor(.secondary)
-                                }
-                                Spacer()
+                            let knownTotal = totalFrames ?? 0
+                            HStack(spacing: 0) {
+                                Text(knownTotal > 0
+                                     ? "Progress: Frame \(currentFrame) of \(knownTotal)"
+                                     : "Progress: Frame \(currentFrame)")
+                                    .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                                // Two Spacers put the percentage off-center whenever the side
+                                // labels differ in width; three equal thirds keep it exactly
+                                // centered under the bar.
+                                Text(knownTotal > 0
+                                     ? String(format: "%.1f%%", min(100, max(0, Double(currentFrame) / Double(knownTotal) * 100)))
+                                     : " ")
+                                    .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+
                                 Text("\(String(format: "%.1f", currentFPS)) FPS")
                                     .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
                             }
                             .font(.caption)
                             
