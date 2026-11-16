@@ -318,7 +318,7 @@ struct HeatMapView: View {
                 .font(.system(size: 10, weight: .bold))
             Text("VMAF: \(String(format: "%.2f", frame.vmafScore))")
             Text("Time: \(formatTime(frame.timestamp))")
-            Text("Motion: \(String(format: "%.2f", frame.integerMotion))")
+            Text("Motion (\(frame.motionReading?.feature ?? "n/a")): \(frame.motionReading.map { String(format: "%.2f", $0.value) } ?? "--")")
             Text("ADM2: \(String(format: "%.2f", frame.integerAdm2))")
         }
         .font(.system(size: 9))
