@@ -19,6 +19,8 @@ class VMAFCalculator {
         let frameMetrics: [FrameMetric]
         let duration: TimeInterval
         let frameCount: Int
+        /// libvmaf identity that produced these values, for export provenance.
+        var libvmafVersion: String? = nil
     }
     
     // Add delegate for progress updates
@@ -35,14 +37,26 @@ class VMAFCalculator {
     struct FrameMetric: Codable, Identifiable {
         let frameNumber: Int
         let vmafScore: Double
-        let integerMotion: Double
-        let integerMotion2: Double
+        /// libvmaf 2.x `integer_motion`. Nil when the engine did not report it.
+        let integerMotion: Double?
+        /// libvmaf 3.x `integer_motion2`. A different feature from
+        /// `integer_motion`, so the two identities are kept apart rather than
+        /// collapsed into one field.
+        let integerMotion2: Double?
         let integerAdm2: Double
         let integerAdmScales: [Double]
         let integerVifScales: [Double]
-        
+
         // Identifiable conformance
         var id: Int { frameNumber }
+
+        /// The motion reading to display, with the libvmaf feature name it came
+        /// from. Prefer the legacy identity when the engine reported it.
+        var motionReading: (feature: String, value: Double)? {
+            if let integerMotion { return ("integer_motion", integerMotion) }
+            if let integerMotion2 { return ("integer_motion2", integerMotion2) }
+            return nil
+        }
         
         // Computed property for timestamp (assuming 30fps)
         var timestamp: TimeInterval {
@@ -51,8 +65,8 @@ class VMAFCalculator {
         
         init(frameNumber: Int,
              vmafScore: Double,
-             integerMotion: Double,
-             integerMotion2: Double,
+             integerMotion: Double?,
+             integerMotion2: Double?,
              integerAdm2: Double,
              integerAdmScales: [Double],
              integerVifScales: [Double]) {
@@ -76,12 +90,12 @@ class VMAFCalculator {
             
             let metricsContainer = try container.nestedContainer(keyedBy: MetricsCodingKeys.self, forKey: .metrics)
             vmafScore = try metricsContainer.decode(Double.self, forKey: .vmaf)
-            // libvmaf 2.x emits `integer_motion`; libvmaf 3.x renamed the feature and emits
-            // only `integer_motion2`/`integer_motion3`. Accept either spelling so results from
-            // both engines decode, preferring the legacy key when present.
+            // libvmaf 2.x emits `integer_motion`; libvmaf 3.2.0 replaced it with
+            // `integer_motion2`/`integer_motion3`. Each identity is stored in its
+            // own optional so a value is never recorded under a feature the engine
+            // did not report. VMAF itself is unaffected.
             integerMotion = try metricsContainer.decodeIfPresent(Double.self, forKey: .integerMotion)
-                ?? metricsContainer.decode(Double.self, forKey: .integerMotion2)
-            integerMotion2 = try metricsContainer.decode(Double.self, forKey: .integerMotion2)
+            integerMotion2 = try metricsContainer.decodeIfPresent(Double.self, forKey: .integerMotion2)
             integerAdm2 = try metricsContainer.decode(Double.self, forKey: .integerAdm2)
             
             integerAdmScales = [
@@ -105,8 +119,10 @@ class VMAFCalculator {
             
             var metricsContainer = container.nestedContainer(keyedBy: MetricsCodingKeys.self, forKey: .metrics)
             try metricsContainer.encode(vmafScore, forKey: .vmaf)
-            try metricsContainer.encode(integerMotion, forKey: .integerMotion)
-            try metricsContainer.encode(integerMotion2, forKey: .integerMotion2)
+            // Round-trip preserves identity: a libvmaf 3.x reading is re-emitted
+            // as `integer_motion2`, never resurrected under the legacy name.
+            try metricsContainer.encodeIfPresent(integerMotion, forKey: .integerMotion)
+            try metricsContainer.encodeIfPresent(integerMotion2, forKey: .integerMotion2)
             try metricsContainer.encode(integerAdm2, forKey: .integerAdm2)
             
             try metricsContainer.encode(integerAdmScales[0], forKey: .integerAdmScale0)
@@ -154,29 +170,50 @@ class VMAFCalculator {
         let frames: [FrameMetric]
         let pooledMetrics: [String: VMAFMetrics]
         let aggregateMetrics: [String: String]
-        
+        /// libvmaf reports its version at the top level of the JSON log; newer
+        /// builds emit `3.2.0`, older ones a git hash. Kept so each result
+        /// records which feature identities it may contain.
+        let libvmafVersion: String?
+
         enum CodingKeys: String, CodingKey {
             case frames
             case pooledMetrics = "pooled_metrics"
             case aggregateMetrics = "aggregate_metrics"
+            case libvmafVersion = "version"
         }
-        
+
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             frames = try container.decode([FrameMetric].self, forKey: .frames)
             pooledMetrics = try container.decode([String: VMAFMetrics].self, forKey: .pooledMetrics)
             aggregateMetrics = try container.decode([String: String].self, forKey: .aggregateMetrics)
+            libvmafVersion = try container.decodeIfPresent(String.self, forKey: .libvmafVersion)
         }
-        
+
         func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(frames, forKey: .frames)
             try container.encode(pooledMetrics, forKey: .pooledMetrics)
             try container.encode(aggregateMetrics, forKey: .aggregateMetrics)
+            try container.encodeIfPresent(libvmafVersion, forKey: .libvmafVersion)
         }
     }
     
-    private let ffmpegPath: String
+    private let engine: EngineHelper.Availability
+
+    /// Path for launching, or the typed packaging problem. A missing native
+    /// helper must not fall back to the foreign-architecture helper: that would
+    /// run every frame through Rosetta, which ends at macOS 28.
+    private var ffmpegPath: String {
+        get throws {
+            switch engine {
+            case .bundled(let path), .systemFallback(let path):
+                return path
+            case .unavailable(let problem):
+                throw VMAFError.engineUnavailable(problem)
+            }
+        }
+    }
     
     // Determine the resolution of a video to validate inputs and choose the right model.
     private func videoResolution(for url: URL) async throws -> (width: Int, height: Int) {
@@ -252,9 +289,13 @@ class VMAFCalculator {
     }
     
     init() {
-        ffmpegPath = EngineHelper.resolvePath(bundle: .main)
-            ?? EngineHelper.fallbackSystemPath
-        print("Using ffmpeg at path: \(ffmpegPath)")
+        engine = EngineHelper.resolve(bundle: .main)
+        switch engine {
+        case .bundled(let path), .systemFallback(let path):
+            print("Using ffmpeg at path: \(path)")
+        case .unavailable(let problem):
+            NSLog("Better VMAF: no usable bundled FFmpeg engine: \(problem.localizedDescription)")
+        }
     }
     
     func calculateVMAF(referenceVideo: URL, comparisonVideo: URL) async throws -> VMAFResult {
@@ -297,7 +338,7 @@ class VMAFCalculator {
         
         // Build the ffmpeg command with enhanced metrics collection
         let command = [
-            ffmpegPath,
+            try ffmpegPath,
             "-hide_banner",
             "-loglevel", "info",
             "-i", referenceVideo.path,
@@ -433,7 +474,8 @@ class VMAFCalculator {
                 harmonicMean: vmafMetrics.harmonicMean,
                 frameMetrics: vmafData.frames,
                 duration: duration,
-                frameCount: frameCount
+                frameCount: frameCount,
+                libvmafVersion: vmafData.libvmafVersion
             )
         } catch {
             print("Error during VMAF calculation: \(error)")
@@ -537,6 +579,7 @@ extension VMAFCalculator {
             comparisonHeight: Int
         )
         case missingVideoTrack
+        case engineUnavailable(EngineHelper.Problem)
         
         var localizedDescription: String {
             switch self {
@@ -556,6 +599,8 @@ extension VMAFCalculator {
                 return "The resolutions of the Reference and Comparison videos do not match."
             case .missingVideoTrack:
                 return "No video track found in one of the selected files."
+            case .engineUnavailable(let problem):
+                return problem.localizedDescription
             }
         }
     }

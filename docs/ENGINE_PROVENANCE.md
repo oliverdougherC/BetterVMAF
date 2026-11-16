@@ -28,8 +28,11 @@ starts a Rosetta process and Intel Macs keep working.
   timestamped. Xcode's copy phase preserves this signature; the app must not re-sign the
   helpers with a different identity, and notarization must cover both.
 - Why not a single universal binary: it is 161 MB, over GitHub's 100 MB per-file limit for
-  non-LFS content, and the Intel slice is dead weight (95 MB) on every Apple Silicon install.
-  Two thin files keep every blob under the limit and make the launch choice explicit.
+  non-LFS content. Two thin files keep every blob under the limit and make the launch choice
+  explicit. Note that every installed .app carries **both** helpers (~161 MB of engine):
+  shipping two files removes the Rosetta *dependency*, not the Intel *bytes*. Future per-arch
+  release packages (or LFS + a universal helper) could drop the foreign helper from each
+  download; until then, `create_dmg.sh` bundles both so one DMG serves both architectures.
 
 ## Previous engine (replaced)
 
@@ -50,13 +53,22 @@ The replacement was validated against the old pinned engine on a deterministic f
 - Same 96 frames; maximum per-frame VMAF delta 0.028. Scores are model-for-model equal within
   encoder-thread noise; the app's stored model files are unchanged.
 
-libvmaf 3.2.0 renamed the `integer_motion` feature to per-scale `integer_motion2`/`integer_motion3`
-and it cannot be requested under the old name. The app previously decoded `integer_motion`
-strictly, which would have failed every analysis on the new engine. `VMAFCalculator.FrameMetric`
-now accepts either spelling, falling back to `integer_motion2`. This is a **metric identity change**
-for the "Motion" column: it is no longer the libvmaf 2.x `integer_motion` value. The old name is kept
-in the UI/export for continuity, but the two engines' Motion values are not directly comparable and
-must not be ranked together. Confirm against a fixture before publishing side-by-side comparisons.
+libvmaf 3.2.0 renamed the `integer_motion` feature to `integer_motion2`/`integer_motion3`
+(the legacy name cannot be requested from the new engine). The app previously decoded
+`integer_motion` strictly, which would have failed every analysis on the new engine.
+`VMAFCalculator.FrameMetric` now keeps **both identities as separate optionals**: a 3.x log
+fills only `integerMotion2`, a 2.x log only `integerMotion`, and each value re-encodes under
+its own key (round-trip never resurrects a feature the engine did not report). The displayed
+and exported "Motion" label names its source feature (`integer_motion` or `integer_motion2`),
+and results carry the `libvmaf` version from the log for provenance. The two features are
+**different measurements**: Motion values from the old and new engines are not directly
+comparable and must not be ranked together.
+
+The CI job (`Verify bundled FFmpeg engine`) proves the shipped helpers execute by running
+`Fixtures/vmaf-reference.mp4`/`vmaf-comparison.mp4` (24 frames, testsrc2 128x72, CRF 20/42;
+check the exact command in `.github/workflows/ci.yml`) through the built app's own resources
+on both slices and asserting the pinned mean (33.08 ±0.5), the libvmaf 3.2.0 version string,
+and the expected feature identities.
 
 ## Reproducing the download
 

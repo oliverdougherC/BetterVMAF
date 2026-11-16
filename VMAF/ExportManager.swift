@@ -33,12 +33,18 @@ class ExportManager {
     }
     
     func exportToCSV(result: VMAFCalculator.VMAFResult, options: ExportOptions) throws -> String {
-        var csv = "Frame Number,Timestamp,VMAF Score,Motion,ADM2\n"
-        
+        // Name the Motion column after the libvmaf feature that produced it;
+        // the legacy `integer_motion` and libvmaf 3.x `integer_motion2` are
+        // different measurements and must not share an unlabeled column.
+        let motionFeature = result.frameMetrics.first?.motionReading?.feature ?? "integer_motion"
+        var csv = "Engine,libvmaf,\(result.libvmafVersion ?? "unknown")\n"
+        csv += "Frame Number,Timestamp,VMAF Score,Motion (\(motionFeature)),ADM2\n"
+
         // Add frame-by-frame data if requested
         if options.includeFrameData {
             for metric in result.frameMetrics {
-                let row = "\(metric.frameNumber),\(metric.timestamp),\(metric.vmafScore),\(metric.integerMotion),\(metric.integerAdm2)\n"
+                let motion = metric.motionReading.map { String($0.value) } ?? ""
+                let row = "\(metric.frameNumber),\(metric.timestamp),\(metric.vmafScore),\(motion),\(metric.integerAdm2)\n"
                 csv += row
             }
         }
@@ -57,6 +63,10 @@ class ExportManager {
     
     func exportToJSON(result: VMAFCalculator.VMAFResult, options: ExportOptions) throws -> Data {
         var exportDict: [String: Any] = [:]
+        exportDict["engine"] = [
+            "metric": "libvmaf",
+            "version": result.libvmafVersion ?? "unknown"
+        ]
         
         if options.includeFrameData {
             exportDict["frames"] = result.frameMetrics.map { metric in
@@ -64,7 +74,8 @@ class ExportManager {
                     "frameNumber": metric.frameNumber,
                     "timestamp": metric.timestamp,
                     "vmafScore": metric.vmafScore,
-                    "motion": metric.integerMotion,
+                    // Key the motion value by its libvmaf feature identity.
+                    (metric.motionReading?.feature ?? "motion"): metric.motionReading?.value ?? 0.0,
                     "adm2": metric.integerAdm2
                 ]
             }

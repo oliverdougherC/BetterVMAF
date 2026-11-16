@@ -108,7 +108,8 @@ class PDFGenerator {
         
         // Frame data on new pages if needed
         if includeFrameData {
-            let headers = ["Frame", "Time", "VMAF", "Motion", "ADM2"]
+            let motionFeature = result.frameMetrics.first?.motionReading?.feature ?? "integer_motion"
+            let headers = ["Frame", "Time", "VMAF", "Motion (\(motionFeature))", "ADM2"]
             let columnWidths: [CGFloat] = [60, 80, 80, 80, 80]
             let startX: CGFloat = 48
             
@@ -173,7 +174,7 @@ class PDFGenerator {
                     String(metric.frameNumber),
                     String(format: "%.2fs", metric.timestamp),
                     String(format: "%.2f", metric.vmafScore),
-                    String(format: "%.2f", metric.integerMotion),
+                    metric.motionReading.map { String(format: "%.2f", $0.value) } ?? "--",
                     String(format: "%.2f", metric.integerAdm2)
                 ]
                 
