@@ -40,6 +40,9 @@ jobs:
           for script in create_dmg.sh scripts/release/*.sh; do bash -n "$script"; done
           xcodebuild -list -project VMAF.xcodeproj
 
+      - name: Lint GitHub Actions workflows
+        run: scripts/release/lint-workflows.sh
+
       - name: Test release metadata and feed validation
         run: python3 -B -m unittest discover -s scripts/release -p 'test_*.py'
 
