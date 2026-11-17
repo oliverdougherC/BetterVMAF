@@ -3,15 +3,24 @@
 1. **Renew Apple Developer Program membership** in your Apple account. Do not buy a
    different account or change the bundle identifier. Confirm the team has accepted
    current agreements. Membership renewal itself is a maintainer action.
-2. On a trusted Mac, use Xcode → Settings → Accounts → Manage Certificates to create
-   a **Developer ID Application** certificate (not Apple Development, Distribution,
-   or Developer ID Installer). Export the certificate **and its private key** from
-   Keychain Access as a password-protected `.p12`. Record the ten-character Team ID.
-   Create an **App Store Connect team API key** with Developer access or an appropriate
-   higher role for notarization; record Key ID and Issuer ID and securely retain the
-   one-time `.p8` download. Use a team key: this workflow passes `--issuer` to notarytool.
-   See [Apple Developer ID](https://developer.apple.com/developer-id/) and
-   [Apple's notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
+2. On a trusted Mac, as the Apple account holder:
+   - In Keychain Access, use **Certificate Assistant → Request a Certificate From a
+     Certificate Authority**, saving the CSR to disk. In the developer account's
+     **Certificates, Identifiers & Profiles → Certificates → + → Developer ID Application**,
+     upload that CSR and download/install the certificate on the same Mac. In Keychain
+     Access's **My Certificates**, expand the identity to confirm its private key is
+     present, then export the identity and private key as a password-protected `.p12`.
+     Record the 10-character team ID from Membership Details. This pipeline uses a
+     locally exportable Developer ID Application identity.
+     [Apple's certificate procedure](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/).
+   - In App Store Connect, open **Users and Access → Integrations → App Store Connect
+     API → Team Keys → Generate API Key**. Request API access first if prompted. Use
+     a dedicated release key with access to notarization, download its `.p8` once,
+     and record the key ID and issuer UUID. Keep a secure backup of the downloaded key.
+     This pipeline passes `--issuer` and requires a **team** key; individual API keys
+     are not supported by this setup.
+     [Apple's API-key procedure](https://developer.apple.com/documentation/appstoreconnectapi/creating-api-keys-for-app-store-connect-api).
+   See [Apple's notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
 3. Provision the remaining GitHub settings from this repository checkout. Enter
    passwords/identifiers interactively, without putting their values in shell history:
    ```bash
@@ -48,12 +57,12 @@
    checks. The workflow checks the final DMG and mounted app, both staples, exact app
    entitlements, every Sparkle component's team/runtime/timestamp, both pinned helpers,
    EdDSA signatures, version/build, architecture, resources and SHA-256. Real acceptance
-   requires genuine credentials; ad-hoc staging cannot establish it. A first production
-   update also needs two genuinely Developer ID signed builds using the production key
-   on an isolated test channel, to exercise production code-signing policy before release.
+   requires genuine credentials; ad-hoc staging cannot establish it. Keep this signed preflight app as an old-version test copy. Choose a higher final
+   release version so this copy can exercise the real production update after publication.
 7. Choose the first release version after reviewing the existing historical `1.4` draft.
-   Do not overwrite it. The current config is `1.4.0`; if `1.4` is published first, choose
-   a higher version. Land the version change on `main`, rerun preflight, then follow
+   Do not overwrite it. The current config is `1.4.0`; choose a higher version (for example `1.4.1`) if
+   retaining the `1.4.0` preflight copy for the first production update test. If the
+   historical `1.4` draft is published first, the new version must sort above it. Land the version change on `main`, rerun preflight, then follow
    [Version and publish](RELEASING.md#version-and-publish) to create the annotated `vX.Y.Z`
    tag **when you authorize production release work**. Review the generated draft and
    complete assets, source distribution, release notes and clean-Mac acceptance before

@@ -88,14 +88,29 @@ uploading `SPARKLE_PRIVATE_KEY` directly to **release-signing**, then setting th
 A secret-presence audit cannot verify its value; production packaging repeats the actual
 public/private signature check before building.
 
-For disaster recovery on a trusted replacement Mac: verify the separately recorded
-public fingerprint, run `recover-test`, decrypt into an owner-only temporary directory
-(`umask 077; work=$(mktemp -d)`), and import using the pinned tool's
-`generate_keys --account bettervmaf-stable -f "$work/private.key"`. Use the same OpenSSL
-parameters as the helper to decrypt. Compare `generate_keys --account bettervmaf-stable -p`
-with the saved public key, run `provision`, and remove the temporary directory. Never
-replace an existing stable account merely to silence an import error. Loss or rotation
-requires [Sparkle's documented key-rotation procedure](https://sparkle-project.org/documentation/#rotating-signing-keys)
+For disaster recovery on a trusted replacement Mac, first verify the separately
+recorded public fingerprint and run `recover-test`. Use the pinned Sparkle tools from
+the repository helper, and import only into an absent stable Keychain account:
+
+```bash
+set -euo pipefail
+umask 077
+work=$(mktemp -d)
+trap 'rm -rf -- "$work"' EXIT
+scripts/release/sparkle-tools.sh "$work/tools"
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
+  -in /Volumes/OFFLINE/BetterVMAF-stable.enc -out "$work/private.key"
+"$work/tools/bin/generate_keys" --account bettervmaf-stable -f "$work/private.key"
+"$work/tools/bin/generate_keys" --account bettervmaf-stable -p > "$work/public.key"
+cmp "$work/public.key" /Volumes/OFFLINE/BetterVMAF-stable.enc.public
+scripts/release/sparkle-identity.sh provision /Volumes/OFFLINE/BetterVMAF-stable.enc
+rm -rf -- "$work"
+trap - EXIT
+```
+
+Run these commands in a dedicated shell so its EXIT trap removes the plaintext export
+if any step fails. Never replace an existing stable account merely to silence an import
+error. Loss or rotation requires [Sparkle's documented key-rotation procedure](https://sparkle-project.org/documentation/#rotating-signing-keys)
 and an installed-copy acceptance test. Key loss with required signed feeds may require
 a manually installed replacement; do not assume an automatic recovery path.
 
@@ -137,8 +152,8 @@ For a genuine Apple preflight, select `production-preflight` on reviewed `main`.
 credentials before CI and produces `signed-release` without a tag, draft, publication or
 feed deployment. See the activation checklist for clean-Mac acceptance.
 
-The **Exercise isolated Pages deployment** workflow accepts a successful unsigned
-package run ID. It verifies the transferred staging DMG and publishes only the signed
+The **Deploy stable appcast** workflow accepts an optional `staging_package_run_id`
+for an isolated Pages smoke test using a successful unsigned package run ID. It verifies the transferred staging DMG and publishes only the signed
 staging appcast/public key under `/staging/release-readiness/`, with localhost archive URLs.
 This is a transport/permissions test, not a remotely installable update channel. It uses
 a separate `github-pages-staging` environment, serializes with production deployments,
