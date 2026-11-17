@@ -203,6 +203,23 @@ struct QualityTimeline {
         return (time - metrics[bound - 1].timestamp <= metrics[bound].timestamp - time) ? bound - 1 : bound
     }
 
+    /// The frame and summarized column a pointer at `(time, score)` names —
+    /// the whole selection path the heat map hover and tooltip share, kept on
+    /// the model so it is testable end to end.
+    ///
+    /// When the cursor is inside a column summarizing several frames, the
+    /// cursor's score picks which of them it is pointing at (a spike's bad
+    /// frame, not a neighbour at the same x); otherwise the time-nearest frame
+    /// is the answer.
+    func hoverTarget(atTime time: TimeInterval, score: Double, columns: Int, domain: ClosedRange<TimeInterval>) -> (index: Int, bucket: Bucket?)? {
+        guard frameCount > 0 else { return nil }
+        if let column = bucket(coveringTime: time, columns: columns, domain: domain), column.frameCount > 1 {
+            return (nearestIndex(in: column, toScore: score), column)
+        }
+        guard let index = nearestIndex(for: time) else { return nil }
+        return (index, nil)
+    }
+
     /// The frame a pointer at `(time, score)` is pointing at, given the
     /// summarized column under it.
     ///

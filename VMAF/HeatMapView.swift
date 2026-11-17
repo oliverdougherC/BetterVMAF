@@ -128,24 +128,20 @@ struct HeatMapView: View {
     /// name a 98-scoring frame while the pointer sits on the dip.
     private func hoverState(in plot: ChartGeometry, domain: ClosedRange<TimeInterval>, scoreDomain: ClosedRange<Double>) -> Hover? {
         guard interactive, let location = viewport.cursorLocation, plot.data.contains(location) else { return nil }
-        let time = plot.time(atX: location.x, domain: domain)
         let columns = QualityTimeline.densityColumns(width: plot.dataWidth)
-        let index: Int
-        let bucket: QualityTimeline.Bucket?
-        if let column = timeline.bucket(coveringTime: time, columns: columns, domain: domain), column.frameCount > 1 {
-            bucket = column
-            index = timeline.nearestIndex(in: column, toScore: plot.score(atY: location.y, domain: scoreDomain))
-        } else {
-            guard let exact = timeline.nearestIndex(for: time) else { return nil }
-            index = exact
-            bucket = nil
-        }
+        guard let target = timeline.hoverTarget(
+            atTime: plot.time(atX: location.x, domain: domain),
+            score: plot.score(atY: location.y, domain: scoreDomain),
+            columns: columns,
+            domain: domain
+        ) else { return nil }
+        let index = target.index
         return Hover(
             index: index,
             x: plot.x(for: timeline.time(at: index), domain: domain),
             y: plot.y(for: timeline.score(at: index), domain: scoreDomain),
             run: timeline.bandRun(containing: index),
-            bucket: bucket
+            bucket: target.bucket
         )
     }
 

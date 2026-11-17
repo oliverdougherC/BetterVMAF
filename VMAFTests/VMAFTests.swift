@@ -479,6 +479,46 @@ struct QualityTimelineTests {
         #expect(timeline.score(at: top) == 98.0)
     }
 
+    @Test func aggregatedDipIsIdentifiableEndToEnd() throws {
+        // The reviewer's missing verification: the whole path from an
+        // aggregated bad frame to what the tooltip would name, exercised
+        // exactly as the view runs it (hoverTarget composes bucket lookup,
+        // score-aware selection, and run lookup from a pointer position).
+        // 3,000 frames across ~4 columns of a 1350px-wide plot: one frame at
+        // 62.5 buried in a sea of 98s, drawn as the dip's spike.
+        var scores = [Double](repeating: 98.0, count: 3000)
+        let dipIndex = 1500
+        scores[dipIndex] = 62.5
+        let timeline = QualityTimeline(metrics: frames(scores))
+        let geometry = ChartGeometry(size: CGSize(width: 1350, height: 320))
+        let domain = timeline.timeRange
+        let columns = QualityTimeline.densityColumns(width: geometry.dataWidth)
+        let scoreDomain = 0.0...100.0
+
+        // The spike marker is drawn at the dip's score; hover the pointer over
+        // it (column centre x, dip y) and the model must name the exact frame.
+        let spikeX = geometry.x(for: timeline.time(at: dipIndex), domain: domain)
+        let spikeY = geometry.y(for: 62.5, domain: scoreDomain)
+        let hover = try #require(timeline.hoverTarget(
+            atTime: geometry.time(atX: spikeX, domain: domain),
+            score: geometry.score(atY: spikeY, domain: scoreDomain),
+            columns: columns, domain: domain))
+        #expect(hover.index == dipIndex, "tooltip would name frame \(timeline.frameNumber(at: hover.index)) at \(timeline.score(at: hover.index)), not the dip")
+        #expect(hover.bucket?.worstIndex == dipIndex)
+        // The tooltip's other rows come from that index: correct frame number,
+        // and the dip is Poor while its neighbours are Excellent-or-worse.
+        #expect(timeline.frameNumber(at: hover.index) == dipIndex + 1)
+        #expect(QualityBand(vmafScore: timeline.score(at: hover.index)) == .poor)
+        #expect(timeline.bandRun(containing: hover.index) == hover.index...hover.index)
+        // Moving the pointer to the top of the same column (the 98 body) names
+        // a body frame instead, proving selection follows the pointer's score.
+        let bodyHover = try #require(timeline.hoverTarget(
+            atTime: geometry.time(atX: spikeX, domain: domain),
+            score: geometry.score(atY: geometry.y(for: 98.0, domain: scoreDomain), domain: scoreDomain),
+            columns: columns, domain: domain))
+        #expect(timeline.score(at: bodyHover.index) == 98.0)
+    }
+
     @Test func hoverPathStaysFlatOnGiantConsistentClips() {
         // The reviewer's benchmark case: a 300k-frame clip of *consistent*
         // quality is one enormous band run, so a per-hover walk of the run
