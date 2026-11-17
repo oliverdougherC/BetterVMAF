@@ -42,6 +42,7 @@ if [[ "$mode" == production ]]; then
     codesign --verify --strict -R "$requirement" "$dmg"
     xcrun stapler validate "$dmg"
     spctl --assess --type open --context context:primary-signature --verbose "$dmg"
+    spctl --assess --type open --context context:primary-signature --verbose "$dmg"
 fi
 
 hdiutil verify "$dmg" >&2

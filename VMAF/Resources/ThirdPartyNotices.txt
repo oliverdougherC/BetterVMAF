@@ -1,0 +1,22 @@
+Better VMAF third-party components
+
+BetterVMAF application source: MIT, https://github.com/oliverdougherC/BetterVMAF
+
+Sparkle 2.10.1: Copyright Sparkle Project and contributors.
+License: Sparkle-LICENSE.txt (included in this app).
+Source: https://github.com/sparkle-project/Sparkle/tree/2.10.1
+
+FFmpeg 9.0.2, built with GPL and version-3 options, including libvmaf 3.2.0:
+License: FFmpeg-COPYING.GPLv3.txt (included in this app).
+Upstream source: https://github.com/FFmpeg/FFmpeg/tree/n9.0.2
+Bundled binaries were provided by Martin Riedl's FFmpeg Build Server:
+https://ffmpeg.martin-riedl.de/
+Build scripts: https://git.martin-riedl.de/ffmpeg/build-script
+Exact binary identities, build configuration and source-distribution status:
+https://github.com/oliverdougherC/BetterVMAF/blob/main/docs/ENGINE_PROVENANCE.md
+FFmpeg's GPL license and the licenses of its linked libraries apply independently
+of BetterVMAF's MIT license. Upstream source links alone are not a complete
+corresponding-source distribution for these specific prebuilt binaries.
+
+Netflix VMAF models: https://github.com/Netflix/vmaf
+License: VMAF-LICENSE.txt and VMAF-PATENTS.txt (included in this app).

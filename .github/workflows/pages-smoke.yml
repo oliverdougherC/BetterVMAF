@@ -1,0 +1,80 @@
+name: Exercise isolated Pages deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_run_id:
+        description: Successful Package a release run containing staging-integration
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Serialize with production deployment. This harness refuses to replace a live feed.
+concurrency:
+  group: stable-appcast
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: macos-15
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      GH_TOKEN: ${{ github.token }}
+      PACKAGE_RUN_ID: ${{ inputs.package_run_id }}
+      SPARKLE_FEED_URL: http://localhost:18742/appcast.xml
+      REQUIRE_BOTH_ENGINE_SLICES: '1'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Refuse any existing production channel
+        run: |
+          status=$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' https://oliverdougherc.github.io/BetterVMAF/appcast.xml)
+          test "$status" = 404
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          python3 - "$RUNNER_TEMP/releases.json" <<'PY'
+          import json, re, sys
+          releases = json.load(open(sys.argv[1]))
+          if any(not r['draft'] and not r['prerelease'] and re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', r['tag_name']) for page in releases for r in page):
+              raise SystemExit('A production Sparkle release exists; staging Pages deployment is disabled')
+          PY
+      - name: Download and independently verify staging artifacts
+        run: |
+          [[ "$PACKAGE_RUN_ID" =~ ^[0-9]+$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PACKAGE_RUN_ID" > "$RUNNER_TEMP/run.json"
+          python3 - "$RUNNER_TEMP/run.json" <<'PY'
+          import json, sys
+          r=json.load(open(sys.argv[1]))
+          assert r['conclusion'] == 'success' and r['path'] == '.github/workflows/release.yml', r
+          PY
+          gh run download "$PACKAGE_RUN_ID" --name staging-integration --dir "$RUNNER_TEMP/staging"
+          export SPARKLE_PUBLIC_KEY
+          SPARKLE_PUBLIC_KEY=$(cat "$RUNNER_TEMP/staging/staging-public-key.txt")
+          scripts/release/verify-dmg.sh "$RUNNER_TEMP/staging/new/Better-VMAF-1.4.1.dmg" 1.4.1 staging
+          mkdir -p "$RUNNER_TEMP/site/staging/release-readiness"
+          cp "$RUNNER_TEMP/staging/new/appcast.xml" "$RUNNER_TEMP/site/staging/release-readiness/appcast.xml"
+          cp "$RUNNER_TEMP/staging/staging-public-key.txt" "$RUNNER_TEMP/site/staging/release-readiness/public-key.txt"
+          test ! -e "$RUNNER_TEMP/site/appcast.xml"
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ runner.temp }}/site
+
+  deploy:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages-staging
+      url: ${{ steps.deployment.outputs.page_url }}staging/release-readiness/
+    steps:
+      - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        id: deployment

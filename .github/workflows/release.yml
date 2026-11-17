@@ -19,6 +19,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  dispatch-policy:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'production-preflight' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - run: |
+          echo 'Production preflight must run from reviewed main; no signing credentials were accessed.' >&2
+          exit 1
+
   validate:
     if: github.event_name == 'push' && github.repository == 'oliverdougherC/BetterVMAF'
     runs-on: ubuntu-latest
