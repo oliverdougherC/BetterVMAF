@@ -297,7 +297,8 @@ class VMAFCalculator {
         }
     }
     
-    func calculateVMAF(referenceVideo: URL, comparisonVideo: URL) async throws -> VMAFResult {
+    func calculateVMAF(referenceVideo: URL, comparisonVideo: URL, run: ComparisonRun) async throws -> VMAFResult {
+        try run.checkCancellation()
         let referenceResolution = try await videoResolution(for: referenceVideo)
         let comparisonResolution = try await videoResolution(for: comparisonVideo)
         
@@ -376,14 +377,10 @@ class VMAFCalculator {
         }
         process.environment = env
         
-        // Check if we can run ffmpeg directly or need to use a helper shell
-        if !FileManager.default.isExecutableFile(atPath: command[0]) {
-            // If ffmpeg is not executable directly, try using bash to execute it
-            print("ffmpeg not directly executable, trying via /bin/sh")
-            process.executableURL = URL(fileURLWithPath: "/bin/sh")
-            process.arguments = ["-c", command.joined(separator: " ")]
+        guard FileManager.default.isExecutableFile(atPath: command[0]) else {
+            throw VMAFError.permissionDenied
         }
-        
+
         let outputPipe = Pipe()
         process.standardError = outputPipe
         process.standardOutput = outputPipe
@@ -399,12 +396,15 @@ class VMAFCalculator {
                 collectedData.append(data)
             }
             if let output = String(data: data, encoding: .utf8) {
-                self?.parseFFmpegOutput(output)
+                self?.parseFFmpegOutput(output, run: run, process: process)
             }
         }
         
+        defer { fileHandle.readabilityHandler = nil }
         do {
-            try process.run()
+            try run.start(process)
+            defer { run.finish(process) }
+            defer { try? FileManager.default.removeItem(at: logFile) }
             
             // Wait for process to complete
             process.waitUntilExit()
@@ -412,6 +412,7 @@ class VMAFCalculator {
             
             // Stop readability handler
             fileHandle.readabilityHandler = nil
+            try run.checkCancellation()
             
             // Capture all output that was collected
             let dataSnapshot: Data = outputQueue.sync { collectedData }
@@ -453,9 +454,6 @@ class VMAFCalculator {
             let decoder = JSONDecoder()
             let vmafData = try decoder.decode(VMAFData.self, from: jsonData)
             
-            // Clean up the temporary file
-            try? FileManager.default.removeItem(at: logFile)
-            
             // Extract VMAF metrics
             guard let vmafMetrics = vmafData.pooledMetrics["vmaf"] else {
                 print("No VMAF metrics found in JSON data")
@@ -490,7 +488,7 @@ class VMAFCalculator {
     }
     
     // Parse ffmpeg output to extract frame progress information
-    private func parseFFmpegOutput(_ output: String) {
+    private func parseFFmpegOutput(_ output: String, run: ComparisonRun, process: Process) {
         // Example of ffmpeg output: 
         // "frame=  301 fps= 65 q=-0.0 size=N/A time=00:00:10.03 bitrate=N/A speed=2.17x"
         let lines = output.split(separator: "\n")
@@ -534,6 +532,7 @@ class VMAFCalculator {
                 
                 // Notify delegate of progress update
                 DispatchQueue.main.async { [weak self] in
+                    guard run.isRunning(process) else { return }
                     let total = self?.estimatedTotalFrames ?? 0
                     self?.delegate?.vmafCalculatorDidUpdateProgress(
                         frameCount: frameCount,

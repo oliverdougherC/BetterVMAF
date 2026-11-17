@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>SUFeedURL</key>
+    <string>$(SPARKLE_FEED_URL)</string>
+    <key>SUPublicEDKey</key>
+    <string>$(SPARKLE_PUBLIC_KEY)</string>
+    <key>SUEnableInstallerLauncherService</key>
+    <true/>
+    <key>SUVerifyUpdateBeforeExtraction</key>
+    <true/>
+    <key>SURequireSignedFeed</key>
+    <true/>
+    <key>SUSignedFeedFailureExpirationInterval</key>
+    <integer>0</integer>
+</dict>
+</plist>

@@ -5,12 +5,13 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -35,8 +36,12 @@ jobs:
       - name: Check project and packaging syntax
         run: |
           plutil -lint VMAF.xcodeproj/project.pbxproj
-          bash -n create_dmg.sh
+          plutil -lint Config/Updater.plist VMAF/VMAF.entitlements
+          for script in create_dmg.sh scripts/release/*.sh; do bash -n "$script"; done
           xcodebuild -list -project VMAF.xcodeproj
+
+      - name: Test release metadata and feed validation
+        run: python3 -B -m unittest discover -s scripts/release -p 'test_*.py'
 
       - name: Build Release without signing credentials
         run: |
@@ -46,6 +51,8 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=macOS' \
             -derivedDataPath build/DerivedData \
+            -onlyUsePackageVersionsFromResolvedFile \
+            'ARCHS=arm64 x86_64' ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO \
             build
 
@@ -58,82 +65,8 @@ jobs:
         run: |
           set -euo pipefail
           APP="build/DerivedData/Build/Products/Release/Better VMAF.app"
-          RES="$APP/Contents/Resources"
+          scripts/release/verify-app.sh "$PWD/$APP"
 
-          # --- architectures ---
-          test -x "$RES/ffmpeg" && test -x "$RES/ffmpeg.x86_64"
-          echo "ffmpeg:        $(lipo -archs "$RES/ffmpeg")"
-          echo "ffmpeg.x86_64: $(lipo -archs "$RES/ffmpeg.x86_64")"
-          [ "$(lipo -archs "$RES/ffmpeg")" = "arm64" ] || { echo "bundled arm64 helper is missing or not thin arm64"; exit 1; }
-          [ "$(lipo -archs "$RES/ffmpeg.x86_64")" = "x86_64" ] || { echo "Intel helper is missing or not thin x86_64"; exit 1; }
-          while IFS= read -r -d '' bin; do
-            file "$bin" | grep -q 'Mach-O' || continue
-            case "$bin" in *"$RES/ffmpeg.x86_64") continue ;; esac
-            if ! lipo -archs "$bin" 2>/dev/null | grep -q arm64; then
-              echo "Intel-only Mach-O in bundle forces Rosetta on Apple Silicon: $bin"; exit 1
-            fi
-          done < <(find "$APP" -type f -print0)
-
-          # --- pinned checksums (single source of truth: the provenance doc) ---
-          doc=docs/ENGINE_PROVENANCE.md
-          arm_sha=$(grep -F '`VMAF/Resources/ffmpeg` |' "$doc" | awk -F'|' '{gsub(/[` ]/, "", $6); print $6}')
-          intel_sha=$(grep -F '`VMAF/Resources/ffmpeg.x86_64` |' "$doc" | awk -F'|' '{gsub(/[` ]/, "", $6); print $6}')
-          [ "$(shasum -a 256 "$RES/ffmpeg" | awk '{print $1}')" = "$arm_sha" ] || { echo "arm64 helper content does not match the pinned SHA-256"; exit 1; }
-          [ "$(shasum -a 256 "$RES/ffmpeg.x86_64" | awk '{print $1}')" = "$intel_sha" ] || { echo "Intel helper content does not match the pinned SHA-256"; exit 1; }
-
-          # --- signatures ---
-          for helper in "$RES/ffmpeg" "$RES/ffmpeg.x86_64"; do
-            codesign --verify --strict "$helper" || { echo "signature invalid: $helper"; exit 1; }
-            INFO="$(codesign -dvv "$helper" 2>&1)" || { echo "cannot read signature: $helper"; exit 1; }
-            case "$INFO" in *'TeamIdentifier=KU3N25YGLU'*) ;; *) echo "helper not signed by the pinned Developer ID team: $helper"; exit 1 ;; esac
-          done
-
-          # --- capability + real execution from the packaged app ---
-          # Bundle paths contain spaces, so stage model + log under a clean tmp dir.
-          test -f Fixtures/vmaf-reference.mp4 && test -f Fixtures/vmaf-comparison.mp4
-          SANDBOX="$(mktemp -d)"
-          cp "$RES/vmaf_v0.6.1.json" "$SANDBOX/model.json"
-          HOST_ARCH="$(uname -m)"
-          verify_helper() { # $1 = helper slice (arm64|x86_64), $2 = helper path
-            local slice="$1" helper="$2" FF=""
-            if [ "$slice" != "$HOST_ARCH" ]; then
-              if [ "$HOST_ARCH" = arm64 ] && [ "$slice" = x86_64 ] && arch -x86_64 /usr/bin/true 2>/dev/null; then
-                FF="arch -x86_64"   # Rosetta on the runner proves the Intel helper works; the app never takes this path on arm hosts
-              else
-                echo "Skipping $slice execution (host is $HOST_ARCH, no translator): signature and architecture are still verified."
-                return 0
-              fi
-            fi
-            local ver; ver="$($FF "$helper" -hide_banner -version 2>&1)" || { echo "$slice helper failed -version probe"; exit 1; }
-            case "$ver" in *'ffmpeg version 9.0.2'*) ;; *) echo "$slice helper reports unexpected version: $ver"; exit 1 ;; esac
-            local filters; filters="$($FF "$helper" -hide_banner -filters 2>&1)" || { echo "$slice helper failed -filters probe"; exit 1; }
-            case "$filters" in *libvmaf*) ;; *) echo "$slice helper lacks libvmaf"; exit 1 ;; esac
-            local out="$SANDBOX/$slice.json"
-            $FF "$helper" -y -hide_banner -loglevel error \
-              -i Fixtures/vmaf-reference.mp4 -i Fixtures/vmaf-comparison.mp4 \
-              -lavfi "[1:v]setpts=PTS-STARTPTS[dist];[0:v]setpts=PTS-STARTPTS[ref];[dist][ref]libvmaf=model=path=$SANDBOX/model.json:log_fmt=json:log_path=$out:n_threads=4" \
-              -f null - || { echo "$slice helper failed the fixture analysis"; exit 1; }
-            python3 - "$out" "$slice" <<'PY' || exit 1
-          import json, sys
-          d = json.load(open(sys.argv[1]))
-          v = d["pooled_metrics"]["vmaf"]
-          frames = d["frames"]
-          assert len(frames) == 24, f"[{sys.argv[2]}] expected 24 scored frames, got {len(frames)}"
-          assert abs(v["mean"] - 33.08) < 0.5, f"[{sys.argv[2]}] mean VMAF {v['mean']} deviates from the pinned 33.08"
-          assert "integer_motion2" in frames[0]["metrics"], "expected libvmaf 3.x feature identities"
-          assert "integer_motion" not in frames[0]["metrics"], "legacy identity should be absent on 3.x"
-          assert d.get("version") == "3.2.0", f"unexpected libvmaf version {d.get('version')}"
-          print(f"[{sys.argv[2]}] VMAF mean {v['mean']:.2f} over {len(frames)} frames")
-          PY
-          }
-          verify_helper arm64 "$RES/ffmpeg"
-          verify_helper x86_64 "$RES/ffmpeg.x86_64"
-          rm -rf "$SANDBOX"
-          echo "Engine verification passed (arch, checksums, signatures, libvmaf fixture on both slices)."
-
-
-      # These currently exercise the Xcode template and app launch only.
-      # Passing CI does not establish metric or comparison correctness.
       - name: Run unit and UI tests
         run: |
           xcodebuild \
@@ -143,6 +76,7 @@ jobs:
             -destination 'platform=macOS' \
             -derivedDataPath build/DerivedData \
             -resultBundlePath build/TestResults.xcresult \
+            -onlyUsePackageVersionsFromResolvedFile \
             -parallel-testing-enabled NO \
             CODE_SIGN_IDENTITY=- \
             CODE_SIGN_STYLE=Manual \

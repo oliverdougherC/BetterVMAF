@@ -24,7 +24,7 @@ The current source project targets **macOS 15.2 or later**. Older release assets
 
 VMAF predicts perceived quality relative to a reference under a model's assumptions. **A score is not a percentage of retained quality, and 100 is not proof of identical pixels or invisible degradation.** Scores depend on the model, viewing assumptions, input correspondence, and preprocessing. Inspect the video when making an encoding decision.
 
-Current limitations include a 30 fps assumption in displayed timestamps, incomplete alignment/color validation, and a batch cancellation race. See the [source audit](docs/REPOSITORY_AUDIT.md) for evidence and the development backlog for planned repairs.
+Current limitations include a 30 fps assumption in displayed timestamps and incomplete alignment/color validation. See the [source audit](docs/REPOSITORY_AUDIT.md) for evidence and the development backlog for planned repairs.
 
 ## Develop
 
@@ -34,7 +34,7 @@ cd BetterVMAF
 open VMAF.xcodeproj
 ```
 
-Use the shared **VMAF** scheme. See [CONTRIBUTING.md](CONTRIBUTING.md) for build/test commands, workflow, and packaging. `./create_dmg.sh` creates `Better-VMAF.dmg`.
+Use the shared **VMAF** scheme. See [CONTRIBUTING.md](CONTRIBUTING.md) for build and test commands and [Releasing BetterVMAF](docs/RELEASING.md) for local packaging, Sparkle, and distribution.
 
 ## License and dependencies
 
