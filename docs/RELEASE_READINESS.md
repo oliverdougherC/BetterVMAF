@@ -55,7 +55,7 @@ record. Secret presence is not proof of usable credentials or an offline backup.
   archive validation, edited/malformed feed, same-length archive edit and wrong-key
   rejection. A separate download job verifies the transferred artifacts independently.
 - Pinned actionlint now checks workflow syntax/expressions in CI, alongside shell/plist
-  syntax and the 14 release tests. Package verification checks the newly bundled notices.
+  syntax and the 15 release tests. Package verification checks the newly bundled notices.
 - Pages smoke testing is separately scoped and serialized with production, refuses an
   existing live production channel/release, and emits only staging-path data. The
   production feed deploy still selects the highest complete immutable stable release
@@ -69,9 +69,9 @@ repository's documented Xcode 16.4 and shared VMAF scheme. Local output is ignor
 
 - Final unsigned DMG: `build/readiness-final-unsigned`, mounted metadata/version/build,
   architectures, model/license resources, Applications symlink and SHA-256 verified.
-- Two-version signed staging pair: `build/readiness-staging-verified`. Pinned official
+- Two-version signed staging pair: `build/readiness-final-staging`. Pinned official
   sign_update verifies the signed feed; independent CryptoKit checks both signatures.
-  Real corruption/identity rejection checks pass. The identity is disposable and removed.
+  Real corruption/identity rejection checks pass. The identity is disposable and removed. A stopped staging server also produced the expected Sparkle Update Error dialog.
 - Both packaged engines retain exact SHA-256 and Developer ID signatures. Fixture:
   24 frames, libvmaf 3.2.0; arm64 mean 33.08, x86_64 via Rosetta mean 33.09.
 - Separate installed staging pair: `build/readiness-ui/Better VMAF.app` updated through
@@ -79,7 +79,7 @@ repository's documented Xcode 16.4 and shared VMAF scheme. Local output is ignor
 - Encrypted-backup helper exercised with a disposable Keychain account. Creation,
   decrypt/compare, actual recovered-key signing, independent verification, changed-byte
   rejection and a separate recovery invocation passed. Test account/backups removed.
-- `python3 -B -m unittest discover -s scripts/release -p 'test_*.py'`: 14 passing tests,
+- `python3 -B -m unittest discover -s scripts/release -p 'test_*.py'`: 15 passing tests,
   including actual missing-credential package rejection before xcodebuild/output and
   exclusion of credential values from child environments. Existing publication tests
   reject incomplete/mutable assets and wrong metadata; real signature tests reject
@@ -87,10 +87,23 @@ repository's documented Xcode 16.4 and shared VMAF scheme. Local output is ignor
 
 ## Hosted integration evidence
 
-Hosted runs and isolated Pages verification are recorded here after completion. The
-first corrected exploratory run proved unsigned packaging executes and uploads its
-artifact, then was superseded by the final package run; cancelled exploratory runs are
-not counted as successful full-pipeline evidence.
+- [PR macOS CI, 44157102127](https://github.com/oliverdougherC/BetterVMAF/actions/runs/44157102127): passed the shared scheme's build/unit/UI/engine tests, 15 release tests and pinned workflow lint on Xcode 16.4.
+- [Unsigned package job, 44152000881](https://github.com/oliverdougherC/BetterVMAF/actions/runs/44152000881): actually built/mounted the DMG, ran both engines at 33.08/33.09 and uploaded the 69 MB unsigned artifact. This exploratory run was later cancelled before its staging job obtained a runner; it is not a complete successful workflow run.
+- [Production feature-branch rejection, 44154134242](https://github.com/oliverdougherC/BetterVMAF/actions/runs/44154134242): failed explicitly at dispatch-policy, with signing/draft/deployment skipped.
+- [Pages transport, 44157089952](https://github.com/oliverdougherC/BetterVMAF/actions/runs/44157089952): passed real EdDSA verification on Linux, Pages artifact upload and authenticated deployment through github-pages-staging. The public staging feed and public key were fetched and compared byte-for-byte with the verified input; CryptoKit independently verified the downloaded feed. Root production appcast.xml returned HTTP 404 after deployment. Logs confirm prepare has read-only Contents/Actions and deploy has only Pages write plus OIDC. The temporary feature-branch deployment policy was removed after the test; staging deployment now allows only main.
+- [ARM hosted retry, 44154827381](https://github.com/oliverdougherC/BetterVMAF/actions/runs/44154827381): GitHub failed runner acquisition after 15 minutes, explicitly reporting macOS arm64 capacity constraints. This is not a code/test failure. A subsequent ARM attempt was superseded by the explicit native Intel run. The default and production runner choices remain unchanged.
+
+- [Complete unsigned Intel pipeline, 44158538459](https://github.com/oliverdougherC/BetterVMAF/actions/runs/44158538459): **passed** shared CI, unsigned DMG packaging/upload, real two-version staging signing/corruption tests/upload, and independent download/mounted verification of both transferred staging DMGs. Intel FFmpeg executed natively. ARM runtime execution is explicitly skipped on Intel, while its architecture/hash/signature remain required. No signing environment, production tag, draft or production feed deployment was involved.
+- Downloaded that run's unsigned artifact and newer staging DMG were independently mounted and verified on this Apple Silicon Mac with REQUIRE_BOTH_ENGINE_SLICES=1: native arm64 33.08 and x86_64 under Rosetta 33.09. All metadata, model/license resources, code-signature checks, checksums, and staging EdDSA signatures passed.
+- Installed the older hosted staging DMG's app into build/readiness-hosted-ui, served the newer hosted artifacts on loopback, then performed Sparkle's actual download/install/relaunch. About showed 1.4.1 (1004001), the second check reported current, and the external fixture scored 33.08 after relaunch. The test server was stopped after acceptance.
+- [Default ARM PR CI, 44158550848](https://github.com/oliverdougherC/BetterVMAF/actions/runs/44158550848): **passed** on the same code revision as the complete Intel pipeline. Both architectures therefore have real execution evidence; the Intel option supplements the unchanged default/production path.
+
+Cancelled or capacity-failed exploratory runs are not counted as full-pipeline successes.
+
+GitHub administrators can still manually create or publish releases outside these
+workflows. The automated draft path requires successful signed/notarized packaging;
+the feed deploy independently refuses incomplete, mutable or unverifiable releases.
+The unchanged historical 1.4 draft is not a Sparkle release candidate.
 
 ## Remaining activation
 

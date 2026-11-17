@@ -146,11 +146,36 @@ The ephemeral identity is staging-only and removed at exit.
 gh workflow run release.yml --ref main -f mode=unsigned
 ```
 
+The supplemental `unsigned-intel` mode runs the same credential-free jobs on GitHub's
+standard `macos-15-intel` runner. It executes the Intel engine natively and reports arm64
+runtime execution as skipped; arm64 architecture, hashes and signatures are still checked.
+Pair it with native arm64 fixture evidence from the normal mode or a local Mac using
+`REQUIRE_BOTH_ENGINE_SLICES=1`. It never selects the production signing runner or relaxes
+production verification. [GitHub runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+
+```bash
+gh workflow run release.yml --ref main -f mode=unsigned-intel
+```
+
 For a local repeat, run `scripts/release/staging-smoke.sh build/new-staging-directory`.
 The public key is saved in that directory; private exports are excluded from outputs.
 For a genuine Apple preflight, select `production-preflight` on reviewed `main`. It checks
 credentials before CI and produces `signed-release` without a tag, draft, publication or
 feed deployment. See the activation checklist for clean-Mac acceptance.
+
+For a fast Pages transport/permissions test independent of macOS runner availability,
+run the registered appcast workflow on reviewed `main`:
+
+```bash
+gh workflow run appcast.yml --ref main -f staging_transport_smoke=true
+```
+
+It verifies a real signed feed generated from a staging DMG using OpenSSL on Linux,
+then passes it through the Pages artifact and deployment jobs. The retained fixture
+contains only a public key and signed localhost feed. It does not replace the full
+staging archive/mounted-bundle checks. The `github-pages-staging` environment now
+allows only `main`; the task branch was temporarily permitted for the observed smoke
+test, then removed. Root `/appcast.xml` remains absent.
 
 The **Deploy stable appcast** workflow accepts an optional `staging_package_run_id`
 for an isolated Pages smoke test using a successful unsigned package run ID. It verifies the transferred staging DMG and publishes only the signed
