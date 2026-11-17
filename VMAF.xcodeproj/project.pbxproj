@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5DA9701BE21A4658A9A10001 /* vmaf-reference.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 5DA9701BE21A4658A9A10003 /* vmaf-reference.mp4 */; };
+		5DA9701BE21A4658A9A10002 /* vmaf-comparison.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 5DA9701BE21A4658A9A10004 /* vmaf-comparison.mp4 */; };
 		098FD16B72AF42F990C6A001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 098FD16B72AF42F990C6A002 /* Sparkle */; };
 /* End PBXBuildFile section */
 
@@ -28,6 +30,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		5DA9701BE21A4658A9A10003 /* vmaf-reference.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; name = "vmaf-reference.mp4"; path = "Fixtures/vmaf-reference.mp4"; sourceTree = SOURCE_ROOT; };
+		5DA9701BE21A4658A9A10004 /* vmaf-comparison.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; name = "vmaf-comparison.mp4"; path = "Fixtures/vmaf-comparison.mp4"; sourceTree = SOURCE_ROOT; };
 		098FD16B72AF42F990C6A006 /* Config/Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Version.xcconfig; sourceTree = SOURCE_ROOT; };
 		33175F6E2D77B32600B364A8 /* Better VMAF.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Better VMAF.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		33175F7F2D77B32700B364A8 /* Better VMAF Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Better VMAF Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -82,6 +86,8 @@
 			isa = PBXGroup;
 			children = (
 				098FD16B72AF42F990C6A006 /* Config/Version.xcconfig */,
+				5DA9701BE21A4658A9A10003 /* vmaf-reference.mp4 */,
+				5DA9701BE21A4658A9A10004 /* vmaf-comparison.mp4 */,
 				33175F702D77B32600B364A8 /* VMAF */,
 				33175F822D77B32700B364A8 /* VMAFTests */,
 				33175F8C2D77B32700B364A8 /* VMAFUITests */,
@@ -230,6 +236,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5DA9701BE21A4658A9A10001 /* vmaf-reference.mp4 in Resources */,
+				5DA9701BE21A4658A9A10002 /* vmaf-comparison.mp4 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

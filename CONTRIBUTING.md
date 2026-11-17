@@ -16,7 +16,7 @@ Run tests using local ad-hoc signing (no paid developer account is needed):
 xcodebuild -project VMAF.xcodeproj -scheme VMAF -configuration Debug -destination 'platform=macOS' CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= test
 ```
 
-CI builds a universal app and verifies the packaged FFmpeg helpers against a pinned fixture. It also runs unit, UI, and release-script tests. Comparison and timing limitations are tracked in Linear.
+CI builds a universal app and verifies the packaged FFmpeg helpers against a pinned fixture. The signed test host also runs the fixture through the application’s calculator with App Sandbox active. CI runs UI and release-script tests alongside those checks. Comparison and timing limitations are tracked in Linear.
 
 ## Make a change
 

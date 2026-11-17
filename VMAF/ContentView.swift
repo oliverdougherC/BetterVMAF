@@ -30,6 +30,7 @@ struct VMAFView: View {
     @State private var referenceVideo: URL?
     @State private var comparisonVideo: URL?
     @State private var vmafResult: VMAFCalculator.VMAFResult?
+    @ObservedObject private var activity = ComparisonActivity.shared
     @State private var isCalculating = false
     @State private var errorMessage: String?
     @State private var errorDetails: String?
@@ -130,7 +131,7 @@ struct VMAFView: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(referenceVideo == nil || comparisonVideo == nil || isCalculating)
+                    .disabled(referenceVideo == nil || comparisonVideo == nil || isCalculating || !activity.canStart)
                     .controlSize(.large)
                     
                     // Progress Display (Only visible when calculating)
@@ -323,7 +324,8 @@ struct VMAFView: View {
     
     private func calculateVMAF() {
         guard let reference = referenceVideo,
-              let comparison = comparisonVideo else { return }
+              let comparison = comparisonVideo,
+              let run = activity.begin() else { return }
         
         isCalculating = true
         errorMessage = nil
@@ -338,14 +340,13 @@ struct VMAFView: View {
         // Set self as delegate to receive progress updates
         calculator.delegate = self
         
-        let activity = ComparisonActivity.shared
-        let comparisonID = activity.begin()
         Task {
-            defer { activity.end(comparisonID) }
+            defer { activity.end(run) }
             do {
                 let result = try await calculator.calculateVMAF(
                     referenceVideo: reference,
-                    comparisonVideo: comparison
+                    comparisonVideo: comparison,
+                    run: run
                 )
                 // The per-frame summary is O(frames); keep it off the main actor
                 // so the first heat map render does not stall the UI.
@@ -353,6 +354,7 @@ struct VMAFView: View {
                     QualityTimeline(metrics: result.frameMetrics)
                 }.value
                 await MainActor.run {
+                    guard !run.isCancelled else { return }
                     self.vmafResult = result
                     self.frameTimeline = timeline
                     self.isCalculating = false
@@ -361,6 +363,7 @@ struct VMAFView: View {
                 }
             } catch {
                 await MainActor.run {
+                    guard !run.isCancelled else { return }
                     self.errorMessage = error.localizedDescription
                     self.errorDetails = buildErrorDetails(error: error)
                     self.ffmpegExitStatus = calculator.getLastTerminationStatus()

@@ -19,6 +19,7 @@ REPOSITORY = "oliverdougherC/BetterVMAF"
 RELEASES = f"https://github.com/{REPOSITORY}/releases"
 STABLE_FEED = "https://oliverdougherc.github.io/BetterVMAF/appcast.xml"
 BUNDLE_ID = "neurophasia.BetterVMAF"
+STABLE_MINIMUM_OS = "15.2"
 SPARKLE = "http://www.andymatuschak.org/xml-namespaces/sparkle"
 VERSION = r"[1-9][0-9]{0,2}\.(?:0|[1-9][0-9]{0,2})\.(?:0|[1-9][0-9]{0,2})"
 SIGNATURE = re.compile(rb"edSignature: ([A-Za-z0-9+/]{86}==)\nlength: ([0-9]+)\n-->\n")
@@ -150,7 +151,12 @@ def check_bundle(app, version, mode, feed, key):
     for name, value in expected.items():
         if info.get(name) != value:
             raise ValueError(f"Packaged Info.plist has unexpected {name}")
-    return info["LSMinimumSystemVersion"]
+    minimum_os = info["LSMinimumSystemVersion"]
+    # A feed with only the latest release must keep the original OS floor.
+    if mode == "production" and minimum_os != STABLE_MINIMUM_OS:
+        raise ValueError(f"The single-item stable feed requires macOS {STABLE_MINIMUM_OS}; "
+                         "retain signed compatible releases before changing the minimum")
+    return minimum_os
 
 
 def app_entitlements(mode):

@@ -1,5 +1,6 @@
 import base64
 from pathlib import Path
+import plistlib
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -67,6 +68,32 @@ class PublicationTests(unittest.TestCase):
         ]:
             with self.subTest(newest=newest), self.assertRaises(ValueError):
                 release.select_published([[published("v1.4.0"), newest]])
+
+    def test_single_item_production_feed_cannot_raise_the_os_floor(self):
+        with TemporaryDirectory() as scratch:
+            app = Path(scratch)
+            contents = app / "Contents"
+            contents.mkdir()
+            plist = contents / "Info.plist"
+            info = {
+                "CFBundleShortVersionString": VERSION,
+                "CFBundleVersion": release.build_number(VERSION),
+                "CFBundleIdentifier": release.BUNDLE_ID,
+                "SUFeedURL": release.STABLE_FEED,
+                "SUPublicEDKey": "test public key",
+                "SURequireSignedFeed": True,
+                "SUVerifyUpdateBeforeExtraction": True,
+                "SUEnableInstallerLauncherService": True,
+                "SUSignedFeedFailureExpirationInterval": 0,
+                "LSMinimumSystemVersion": "15.2",
+            }
+            plist.write_bytes(plistlib.dumps(info))
+            self.assertEqual(release.check_bundle(app, VERSION, "production", release.STABLE_FEED,
+                                                  "test public key"), "15.2")
+            info["LSMinimumSystemVersion"] = "16.0"
+            plist.write_bytes(plistlib.dumps(info))
+            with self.assertRaisesRegex(ValueError, "retain signed compatible releases"):
+                release.check_bundle(app, VERSION, "production", release.STABLE_FEED, "test public key")
 
     def test_staging_only_uses_localhost(self):
         url = "http://localhost:8000/appcast.xml"

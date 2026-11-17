@@ -12,12 +12,15 @@ import AVFoundation
 struct VMAFBatchView: View {
     @State private var referenceVideo: URL?
     @State private var comparisons: [BatchItem] = []
-    @State private var isRunning = false
+    @ObservedObject private var activity = ComparisonActivity.shared
+    @State private var activeRun: ComparisonRun?
+    @State private var isCancelling = false
+    private var isRunning: Bool { activeRun != nil }
     @State private var validationMessage: String?
     @State private var batchError: String?
     @State private var showCommandSheet = false
     @State private var ffmpegCommand: String = ""
-    @State private var currentIndex: Int?
+    @State private var currentID: UUID?
     
     private let calculator = VMAFCalculator()
     
@@ -62,7 +65,7 @@ struct VMAFBatchView: View {
                                 ForEach(comparisons) { item in
                                     BatchItemRow(
                                         item: item,
-                                        isCurrent: currentIndex.map { comparisons[$0].id == item.id } ?? false,
+                                        isCurrent: currentID == item.id,
                                         removeAction: { removeComparison(item) },
                                         canRemove: !isRunning
                                     )
@@ -107,13 +110,14 @@ struct VMAFBatchView: View {
                             }
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(referenceVideo == nil || comparisons.isEmpty || isRunning)
+                        .disabled(referenceVideo == nil || comparisons.isEmpty || isRunning || !activity.canStart)
                         
                         if isRunning {
                             Button(action: cancelBatch) {
                                 Label("Cancel", systemImage: "stop.fill")
                             }
                             .buttonStyle(.bordered)
+                            .disabled(isCancelling)
                         }
                         
                         Spacer()
@@ -184,93 +188,73 @@ struct VMAFBatchView: View {
     }
     
     private func startBatch() {
-        guard let reference = referenceVideo else { return }
+        guard let reference = referenceVideo, activeRun == nil else { return }
+        let pendingItems = comparisons.filter { $0.status != .completed }
+        guard !pendingItems.isEmpty else {
+            validationMessage = "No pending videos to process."
+            return
+        }
+        guard let run = activity.begin() else { return }
+        activeRun = run
         validationMessage = nil
         batchError = nil
-        
-        let activity = ComparisonActivity.shared
-        let comparisonID = activity.begin()
+        calculator.delegate = self
+
         Task {
-            defer { activity.end(comparisonID) }
-            // Determine which items need processing (skip already completed).
-            let pendingIndices = await MainActor.run { comparisons.indices.filter { comparisons[$0].status != .completed } }
-            if pendingIndices.isEmpty {
-                await MainActor.run {
-                    validationMessage = "No pending videos to process."
-                }
+            defer {
+                currentID = nil
+                activeRun = nil
+                isCancelling = false
+                activity.end(run)
+            }
+
+            let validation = await validate(reference: reference, comparisons: pendingItems.map(\.url), run: run)
+            guard !run.isCancelled else { return }
+            guard validation.isEmpty else {
+                validationMessage = validation.joined(separator: "\n")
                 return
             }
-            
-            // Validate pending items
-            let pendingURLs = await MainActor.run { pendingIndices.map { comparisons[$0].url } }
-            let validation = await validate(reference: reference, comparisons: pendingURLs)
-            if !validation.isEmpty {
-                await MainActor.run {
-                    validationMessage = validation.joined(separator: "\n")
-                }
-                return
-            }
-            
-            await MainActor.run {
-                isRunning = true
-                currentIndex = nil
-                // Reset only pending items
-                comparisons = comparisons.enumerated().map { idx, item in
-                    guard pendingIndices.contains(idx) else { return item }
-                    var mutable = item
-                    mutable.status = .pending
-                    mutable.progressFrames = 0
-                    mutable.totalFrames = nil
-                    mutable.percent = 0
-                    mutable.result = nil
-                    mutable.error = nil
-                    return mutable
-                }
-                calculator.delegate = self
-            }
-            
-            for idx in pendingIndices {
-                if await MainActor.run(body: { !isRunning }) { break }
-                
-                await MainActor.run {
-                    currentIndex = idx
-                    comparisons[idx].status = .running
-                }
-                
-                let cmpURL = await MainActor.run { comparisons[idx].url }
-                
+            for item in pendingItems {
+                guard !run.isCancelled else { break }
+                guard let index = comparisons.firstIndex(where: { $0.id == item.id }) else { continue }
+                currentID = item.id
+                comparisons[index].status = .running
+                comparisons[index].progressFrames = 0
+                comparisons[index].totalFrames = nil
+                comparisons[index].percent = 0
+                comparisons[index].fps = 0
+                comparisons[index].result = nil
+                comparisons[index].error = nil
+
                 do {
-                    let result = try await calculator.calculateVMAF(referenceVideo: reference, comparisonVideo: cmpURL)
-                    await MainActor.run {
-                        comparisons[idx].status = .completed
-                        comparisons[idx].result = result
-                        comparisons[idx].percent = 100
-                        comparisons[idx].progressFrames = result.frameCount
-                        comparisons[idx].totalFrames = result.frameCount
-                    }
+                    let result = try await calculator.calculateVMAF(
+                        referenceVideo: reference, comparisonVideo: item.url, run: run
+                    )
+                    try run.checkCancellation()
+                    comparisons[index].status = .completed
+                    comparisons[index].result = result
+                    comparisons[index].percent = 100
+                    comparisons[index].progressFrames = result.frameCount
+                    comparisons[index].totalFrames = result.frameCount
                 } catch {
-                    await MainActor.run {
-                        comparisons[idx].status = .failed
-                        comparisons[idx].error = error.localizedDescription
-                        batchError = "One or more comparisons failed. Check the list for details."
+                    if run.isCancelled {
+                        comparisons[index].status = .pending
+                        return
                     }
+                    comparisons[index].status = .failed
+                    comparisons[index].error = error.localizedDescription
+                    batchError = "One or more comparisons failed. Check the list for details."
                 }
-            }
-            
-            await MainActor.run {
-                isRunning = false
-                currentIndex = nil
             }
         }
     }
-    
+
     private func cancelBatch() {
-        // Simple cancellation by toggling state; current ffmpeg run will finish but loop stops.
-        isRunning = false
-        currentIndex = nil
+        isCancelling = true
+        activeRun?.cancel()
     }
-    
-    private func validate(reference: URL, comparisons: [URL]) async -> [String] {
+
+    private func validate(reference: URL, comparisons: [URL], run: ComparisonRun) async -> [String] {
         var issues: [String] = []
         guard let referenceProps = try? await videoProps(for: reference) else {
             issues.append("Reference video is unreadable or has no video track.")
@@ -278,6 +262,7 @@ struct VMAFBatchView: View {
         }
         
         for url in comparisons {
+            guard !run.isCancelled else { break }
             guard let props = try? await videoProps(for: url) else {
                 issues.append("\(url.lastPathComponent): unreadable or no video track.")
                 continue
@@ -309,17 +294,15 @@ struct VMAFBatchView: View {
 // MARK: - Delegate
 extension VMAFBatchView: VMAFCalculator.VMAFCalculatorDelegate {
     func vmafCalculatorDidUpdateProgress(frameCount: Int, fps: Double, progress: Double, totalFrames: Int) {
-        guard let idx = currentIndex else { return }
-        if idx < comparisons.count {
-            comparisons[idx].progressFrames = frameCount
-            comparisons[idx].totalFrames = totalFrames > 0 ? totalFrames : comparisons[idx].totalFrames
-            if let total = comparisons[idx].totalFrames, total > 0 {
-                comparisons[idx].percent = min(100, max(0, Double(frameCount) / Double(total) * 100))
-            } else {
-                comparisons[idx].percent = progress
-            }
-            comparisons[idx].fps = fps
+        guard let currentID, let idx = comparisons.firstIndex(where: { $0.id == currentID }) else { return }
+        comparisons[idx].progressFrames = frameCount
+        comparisons[idx].totalFrames = totalFrames > 0 ? totalFrames : comparisons[idx].totalFrames
+        if let total = comparisons[idx].totalFrames, total > 0 {
+            comparisons[idx].percent = min(100, max(0, Double(frameCount) / Double(total) * 100))
+        } else {
+            comparisons[idx].percent = progress
         }
+        comparisons[idx].fps = fps
     }
 }
 

@@ -16,7 +16,13 @@ A maintainer publishes the draft in GitHub. The publication event validates the 
 3. Approve **release-signing** in Actions. Verify the draft contains `Better-VMAF-1.4.0.dmg`, its `.sha256` file, and `appcast.xml`. Review the release notes and FFmpeg distribution notices and corresponding source. Test the signed DMG on clean Macs before publication. Publish the complete draft as a stable release when ready.
 4. Confirm the **Deploy stable appcast** run passed and the Pages URL serves the signed feed. In an older Sparkle-enabled install, choose **Better VMAF → Check for Updates…**.
 
-The existing `1.4` draft predates this pipeline. Leave it alone unless explicitly authorized. If it is later published, choose a higher version for the first Sparkle-enabled release. Users of older builds install the first Sparkle-enabled version manually from GitHub Releases, then use the app menu or opt into automatic checks at Sparkle’s prompt. The macOS minimum is 15.2. Sparkle uses its native download, verification, install, and relaunch UI. Active comparisons, including a batch whose current worker is still finishing after Cancel, hold the app open. Retry installation after work finishes if Sparkle received a cancelled quit request.
+The existing `1.4` draft predates this pipeline. Leave it alone unless explicitly authorized. If it is later published, choose a higher version for the first Sparkle-enabled release. Users of older builds install the first Sparkle-enabled version manually from GitHub Releases, then use the app menu or opt into automatic checks at Sparkle’s prompt. Sparkle uses its native download, verification, and installation UI. Checks and downloads can run during comparisons. If a user tries to install and relaunch during a single comparison or batch, Better VMAF asks them to check again when they are ready to close their results. Command-Q during a comparison offers to keep working or stop the FFmpeg workers and quit. Sparkle can install a prepared update when the user chooses to quit.
+
+## Stable feed compatibility
+
+Every production Sparkle release must support macOS 15.2 while the stable feed lists a single version. Packaging and mounted-app verification enforce that minimum, so publishing a newer stable build preserves the update path for existing Sparkle users. The pre-Sparkle releases lack verified Sparkle assets and are available through GitHub Releases.
+
+Before raising the macOS minimum, update the pipeline to keep the newest verified immutable release for each supported macOS range in a single EdDSA-signed feed. Verify each retained archive and its declared system requirement, sign the complete feed with the stable key, and test Sparkle’s selection on both sides of the new minimum. [Sparkle minimum system versions](https://sparkle-project.org/documentation/publishing/#minimum-system-version-requirements)
 
 ## One-time GitHub setup
 
@@ -72,7 +78,13 @@ python3 -m http.server 18742 --bind 127.0.0.1 --directory build/staging-new
 
 Install the older app by copying it out of the mounted DMG to a writable scratch directory. Open that copy and choose **Check for Updates…**. Choose **Install Update**, then **Install and Relaunch**. Verify that the same copy relaunches as `1.4.1`, then check again for the already-current dialog. Staging is ad-hoc signed, uses `neurophasia.BetterVMAF.Staging`, and accepts a loopback-only feed. Keep the staging and stable app copies in different directories.
 
-For negative cases, start with a fresh copy of the older app. Stop the server to test a network failure. Serve a malformed or edited `appcast.xml` to test feed rejection. To test archive rejection, keep the appcast and its declared DMG length unchanged and modify a byte of the served DMG. Restore pristine staging artifacts between cases. Test an active comparison by opening the update alert, then starting a long comparison before clicking the install button. The app must stay open until the comparison finishes. Run a fixture on physical Apple Silicon and Intel Macs before the first production publication. The package verifier checks both architectures and runs both FFmpeg slices when a native host or Rosetta is available. Local ad-hoc testing does not establish Developer ID, notarization, Gatekeeper, or native Intel acceptance.
+For negative cases, start with a fresh copy of the older app. Stop the server to test a network failure. Serve a malformed or edited `appcast.xml` to test feed rejection. To test archive rejection, keep the appcast and its declared DMG length unchanged and modify a byte of the served DMG. Restore pristine staging artifacts between cases.
+
+Use the installed copy to select both pinned files in `Fixtures/` through the Open panels and verify a 24-frame mean VMAF near 33.08. Run a two-item batch and save CSV, JSON, and PDF through the Save panel to a directory outside the container. Run the fixture again after Sparkle relaunches the updated copy.
+
+During a long comparison, choose **Check for Updates…**, finish downloading the update, then choose **Install and Relaunch** while FFmpeg is still running. Verify that Better VMAF keeps the comparison and explains how to retry. Press Command-Q, choose **Keep Comparing**, and confirm the job continues. Press Command-Q again and confirm **Quit**. Verify the app and its FFmpeg child exit. Sparkle may install the prepared update on that intentional quit.
+
+Run a fixture on physical Apple Silicon and Intel Macs before the first production publication. The package verifier checks both architectures and runs both FFmpeg slices when a native host or Rosetta is available. Local ad-hoc testing does not establish Developer ID, notarization, Gatekeeper, or native Intel acceptance.
 
 ## Recover a release or feed
 
