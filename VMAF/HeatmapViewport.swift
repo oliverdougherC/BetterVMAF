@@ -113,6 +113,9 @@ final class HeatmapViewport {
         rescale(to: zoom * factor, keeping: anchor, in: timeline, geometry: geometry)
     }
 
+    /// Absolute zoom setter. The gestures use relative transforms (`zoom(by:)`,
+    /// `pinch(to:)`); this is the seam for tests and any caller that needs to
+    /// pin a window (e.g. restoring a saved inspection range).
     func setZoom(_ value: Double, in timeline: QualityTimeline, geometry: ChartGeometry) {
         let domain = displayDomain(in: timeline, geometry: geometry)
         rescale(to: value, keeping: (domain.lowerBound + domain.upperBound) / 2, in: timeline, geometry: geometry)
@@ -171,7 +174,6 @@ final class HeatmapViewport {
         offset = min(max(start.offset - Double(translation / geometry.dataWidth) * (visible / pannable), 0), 1)
     }
 
-    func beginDrag() { dragStart = (offset, zoom) }
     func endDrag() { dragStart = nil }
 
     func pinch(to scale: Double, in timeline: QualityTimeline, geometry: ChartGeometry) {

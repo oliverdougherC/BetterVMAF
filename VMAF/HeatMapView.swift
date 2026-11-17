@@ -94,7 +94,7 @@ struct HeatMapView: View {
                     readScroll(deltaY: deltaY, deltaX: deltaX, command: command, plot: plot)
                 })
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(accessibilitySummary(domain: domain))
+                .accessibilityLabel(accessibilitySummary(domain: domain, plot: plot))
 
                 if interactive {
                     HeatmapControls(timeline: timeline, viewport: viewport, geometry: plot)
@@ -209,12 +209,18 @@ struct HeatMapView: View {
         return true
     }
 
-    private func accessibilitySummary(domain: ClosedRange<TimeInterval>) -> String {
+    private func accessibilitySummary(domain: ClosedRange<TimeInterval>, plot: ChartGeometry) -> String {
         guard timeline.frameCount > 0 else { return "Quality heat map, no frame data" }
         let visible = timeline.slice(covering: domain).count
-        let worst = timeline.worstIndex.map {
-            String(format: ", worst frame %d at %.2f", timeline.frameNumber(at: $0), timeline.score(at: $0))
-        } ?? ""
+        // The window's own worst frame, not the clip's: a VoiceOver user hearing
+        // this while zoomed into a clean stretch must not be pointed at a frame
+        // that is off screen. The bucket min is already the per-column worst, so
+        // this reads the same cached summary the plot draws.
+        let worst = timeline
+            .buckets(count: QualityTimeline.densityColumns(width: plot.dataWidth), covering: domain)
+            .min(by: { $0.minScore < $1.minScore })
+            .map { String(format: ", worst frame in view %d at %.2f", timeline.frameNumber(at: $0.worstIndex), $0.minScore) }
+            ?? ""
         return "Quality heat map, \(visible) of \(timeline.frameCount) frames in view, "
             + "\(TimeFormat.exact(domain.lowerBound)) to \(TimeFormat.exact(domain.upperBound))\(worst)."
     }
@@ -298,7 +304,7 @@ private struct HeatmapPlot: View {
         case .density:
             drawDensity(&context, plot: plot, columns: columns)
         case .envelope:
-            drawEnvelope(&context, columns: columns, plot: plot)
+            drawEnvelope(&context, columns: columns)
         }
     }
 
@@ -332,7 +338,7 @@ private struct HeatmapPlot: View {
     /// Per-column worst-to-best span plus a mean line: what a two-hour clip
     /// looks like without drawing 216,000 marks. The span preserves every dip,
     /// the line preserves the trend, and the cost stays at two rects per column.
-    private func drawEnvelope(_ context: inout GraphicsContext, columns: Int, plot: CGRect) {
+    private func drawEnvelope(_ context: inout GraphicsContext, columns: Int) {
         let buckets = timeline.buckets(count: columns, covering: domain)
         guard !buckets.isEmpty else { return }
         let columnWidth = geometry.dataWidth / CGFloat(columns)
@@ -535,8 +541,16 @@ private struct HeatmapTooltip: View {
 
             if let run = hover.run, run.count > 1 {
                 Divider()
-                Text("\(band.rawValue) run: frames \(timeline.frameNumber(at: run.lowerBound))–\(timeline.frameNumber(at: run.upperBound)) · \(run.count) frames · \(TimeFormat.duration(timeline.time(at: run.upperBound) - timeline.time(at: run.lowerBound)))")
-                    .foregroundStyle(band.tint)
+                // The interval covers the hovered band *and worse* frames, so it
+                // is named by the worst band inside it, not the hovered frame's.
+                // Sized to one line of the tooltip's monospaced 10pt width: a
+                // wrapped row here overran the box height the placement math
+                // reserves and drew over its neighbour.
+                let runBand = QualityBand.allCases[timeline.bandIndices[run].min() ?? band.caseIndex]
+                Text("\(runBand.rawValue)-or-worse \(timeline.frameNumber(at: run.lowerBound))–\(timeline.frameNumber(at: run.upperBound)) · \(TimeFormat.duration(timeline.time(at: run.upperBound) - timeline.time(at: run.lowerBound)))")
+                    .foregroundStyle(runBand.tint)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
 
             if let bucket = hover.bucket, bucket.frameCount > 1 {

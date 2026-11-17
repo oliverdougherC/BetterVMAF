@@ -27,10 +27,13 @@ struct QualityTimeline {
         var minScore: Double
         var maxScore: Double
         var meanScore: Double
-        /// Index of the lowest-scoring frame in the column: the evidence to surface.
+        /// Index of the lowest-scoring frame in the column, so summaries can
+        /// still name the exact frame (tooltip, accessibility).
         var worstIndex: Int
-
-        var frameCount: Int { endIndex - startIndex }
+        /// Frames actually inside the column. A count, not `endIndex -
+        /// startIndex`: with out-of-order timestamps the represented indices
+        /// need not be contiguous.
+        var frameCount: Int
     }
 
     /// One occupied (time column, score row) cell of the density grid.
@@ -45,7 +48,6 @@ struct QualityTimeline {
     /// `columns × rows`.
     struct Grid {
         var cells: [Cell]
-        var columns: Int
         var bins: Int
         var scoreDomain: ClosedRange<Double>
         var maxCount: Int
@@ -118,7 +120,11 @@ struct QualityTimeline {
 
     var timeRange: ClosedRange<TimeInterval> {
         guard let first = metrics.first, let last = metrics.last, last.timestamp > first.timestamp else {
-            return 0...max(1, metrics.last?.timestamp ?? 1)
+            // Degenerate (empty, one frame, or repeated timestamps). Anchor on
+            // the data rather than zero: with CA-04's negative first timestamp a
+            // `0...1` fallback would exclude the only frame it has to show.
+            let start = min(0, metrics.first?.timestamp ?? 0)
+            return start...max(start + 1, metrics.last?.timestamp ?? 0)
         }
         return first.timestamp...last.timestamp
     }
@@ -232,6 +238,15 @@ struct QualityTimeline {
 
     /// One bucket per column covering `domain`. Hovering changes neither
     /// argument, so the work is paid once per zoom level and window size.
+    ///
+    /// Each sample is placed by its own timestamp, exactly like `grid`, rather
+    /// than by a scan cursor: with out-of-order frames (possible when sampling)
+    /// a cursor silently files a frame under a column seconds away from its
+    /// real time. Membership is therefore always the set of frames whose
+    /// timestamp falls in the column, and `frameCount`/min/max/mean/worst are
+    /// exact. `startIndex`/`endIndex` are the first and last frame *positions*
+    /// represented; in-order data — every result libvmaf produces — makes them
+    /// contiguous, so no caller has to care.
     func buckets(count columns: Int, covering domain: ClosedRange<TimeInterval>) -> [Bucket] {
         guard !metrics.isEmpty, columns > 0 else { return [] }
         let columnCount = min(columns, max(1, metrics.count))
@@ -240,49 +255,57 @@ struct QualityTimeline {
 
         let span = domain.upperBound - domain.lowerBound
         guard span > 0 else { return [] }
-        let first = lowerBound(for: domain.lowerBound)
-        let last = min(metrics.count, lowerBound(for: domain.upperBound) + 1)
-        guard first < last else { return [] }
+
+        // In-order data (everything libvmaf emits) can be scanned from just the
+        // window, so a drag step costs O(frames in view); out-of-order results
+        // are rare enough to afford a full pass, which is what correctness needs
+        // since a binary search cannot bound them.
+        let scan: Range<Int> = isTimeMonotonic ? slice(covering: domain) : 0..<metrics.count
+
+        // Accumulate min/max/mean per column in one pass, no sorting.
+        var minimum = [Double](repeating: .greatestFiniteMagnitude, count: columnCount)
+        var maximum = [Double](repeating: -.greatestFiniteMagnitude, count: columnCount)
+        var totals = [Double](repeating: 0, count: columnCount)
+        var counts = [Int](repeating: 0, count: columnCount)
+        var worst = [Int](repeating: -1, count: columnCount)
+        var firstIndex = [Int](repeating: -1, count: columnCount)
+        var lastIndex = [Int](repeating: -1, count: columnCount)
+
+        for index in scan {
+            let time = metrics[index].timestamp
+            guard time >= domain.lowerBound else { continue }
+            // The last column is half-open, but a sample sitting exactly on the
+            // domain edge (always true for the final frame, since the range ends
+            // at its timestamp) must land in it rather than nowhere.
+            if time > domain.upperBound + span * 1e-9 { continue }
+            let raw = Int((time - domain.lowerBound) / span * Double(columnCount))
+            let column = min(max(raw, 0), columnCount - 1)
+
+            let score = metrics[index].vmafScore
+            if score < minimum[column] {
+                minimum[column] = score
+                worst[column] = index
+            }
+            if score > maximum[column] { maximum[column] = score }
+            totals[column] += score
+            if firstIndex[column] < 0 { firstIndex[column] = index }
+            lastIndex[column] = index
+            counts[column] += 1
+        }
 
         var result: [Bucket] = []
-        result.reserveCapacity(min(columnCount, last - first))
-        var index = first
-        for column in 0..<columnCount {
-            let columnStart = domain.lowerBound + span * Double(column) / Double(columnCount)
-            var columnEnd = domain.lowerBound + span * Double(column + 1) / Double(columnCount)
-            // The final column is half-open too, but a sample sitting exactly on
-            // the domain edge (always true for the last frame, since the range
-            // ends at its timestamp) must land in it rather than nowhere.
-            if column == columnCount - 1 { columnEnd += span * 1e-9 }
-            // Samples left of the column: a no-op after the first column, since
-            // the inner loop already advanced past them.
-            while index < last, metrics[index].timestamp < columnStart { index += 1 }
-            guard index < last, metrics[index].timestamp < columnEnd else { continue }
-
-            let startIndex = index
-            var minScore = metrics[index].vmafScore
-            var maxScore = minScore
-            var total = 0.0
-            var worst = index
-            while index < last, metrics[index].timestamp < columnEnd {
-                let score = metrics[index].vmafScore
-                if score < minScore {
-                    minScore = score
-                    worst = index
-                }
-                if score > maxScore { maxScore = score }
-                total += score
-                index += 1
-            }
+        result.reserveCapacity(columnCount)
+        for column in 0..<columnCount where counts[column] > 0 {
             result.append(Bucket(
-                startTime: columnStart,
-                endTime: columnEnd,
-                startIndex: startIndex,
-                endIndex: index,
-                minScore: minScore,
-                maxScore: maxScore,
-                meanScore: total / Double(index - startIndex),
-                worstIndex: worst
+                startTime: domain.lowerBound + span * Double(column) / Double(columnCount),
+                endTime: domain.lowerBound + span * Double(column + 1) / Double(columnCount),
+                startIndex: firstIndex[column],
+                endIndex: lastIndex[column] + 1,
+                minScore: minimum[column],
+                maxScore: maximum[column],
+                meanScore: totals[column] / Double(counts[column]),
+                worstIndex: worst[column],
+                frameCount: counts[column]
             ))
         }
 
@@ -294,7 +317,7 @@ struct QualityTimeline {
     /// Bin the frames in `domain` into `columns` time slices by `bins` score
     /// rows.
     func grid(columns: Int, bins: Int, domain: ClosedRange<TimeInterval>, scoreDomain: ClosedRange<Double>) -> Grid {
-        let empty = Grid(cells: [], columns: 0, bins: 0, scoreDomain: scoreDomain, maxCount: 0)
+        let empty = Grid(cells: [], bins: 0, scoreDomain: scoreDomain, maxCount: 0)
         let range = slice(covering: domain)
         guard columns > 0, bins > 0, !range.isEmpty else { return empty }
         let key = Key(columns: columns, bins: bins, domain: domain, scoreDomain: scoreDomain)
@@ -329,21 +352,38 @@ struct QualityTimeline {
             }
         }
 
-        let grid = Grid(cells: cells, columns: columns, bins: bins, scoreDomain: scoreDomain, maxCount: maxCount)
+        let grid = Grid(cells: cells, bins: bins, scoreDomain: scoreDomain, maxCount: maxCount)
         cache.grids[key] = grid
         cache.remember(key)
         return grid
     }
 
+    /// The column a timestamp belongs to, and the effective column count for a
+    /// requested width. Shared by `buckets` and `bucket(coveringIndex:)` so the
+    /// tooltip and the drawing can never disagree about bucket membership.
+    private func columnLayout(for time: TimeInterval, columns requested: Int, domain: ClosedRange<TimeInterval>)
+        -> (columnCount: Int, column: Int)? {
+        let span = domain.upperBound - domain.lowerBound
+        guard span > 0, requested > 0 else { return nil }
+        let columnCount = min(requested, max(1, metrics.count))
+        guard time >= domain.lowerBound, time <= domain.upperBound + span * 1e-9 else { return nil }
+        let column = min(max(Int((time - domain.lowerBound) / span * Double(columnCount)), 0), columnCount - 1)
+        return (columnCount, column)
+    }
+
     /// The bucket covering `index` at a given detail level, for the tooltip.
     func bucket(coveringIndex index: Int, columns: Int, domain: ClosedRange<TimeInterval>) -> Bucket? {
-        guard metrics.indices.contains(index) else { return nil }
-        let time = metrics[index].timestamp
-        let found = buckets(count: columns, covering: domain)
-        if let exact = found.first(where: { $0.startTime <= time && time < $0.endTime }) { return exact }
-        // Rounding at the window edges can leave the last frame outside every
-        // half-open column, so fall back to the bucket that holds its index.
-        return found.first { $0.startIndex <= index && index < $0.endIndex }
+        guard metrics.indices.contains(index),
+              let layout = columnLayout(for: metrics[index].timestamp, columns: columns, domain: domain)
+        else { return nil }
+        let built = buckets(count: layout.columnCount, covering: domain)
+        let span = domain.upperBound - domain.lowerBound
+        // The frame was counted into its own column's bucket by the same
+        // arithmetic, so match that column's start directly — no reliance on
+        // index contiguity, which out-of-order frames break.
+        let target = domain.lowerBound + span * Double(layout.column) / Double(layout.columnCount)
+        if let exact = built.first(where: { $0.startTime == target }) { return exact }
+        return built.min { abs($0.startTime - target) < abs($1.startTime - target) }
     }
 
     // MARK: - Cache
@@ -487,13 +527,24 @@ enum TimeFormat {
             ? String(format: "%d:%02d:%02d", hours, minutes, seconds)
             : String(format: "%d:%02d", minutes, seconds)
         guard spacing < 1 else { return clock }
-        // Decimal places the stride needs (0.5 → 1, 0.25 → 2), then the digits
-        // after the whole second: 21.5 at a half-second stride is "0:21.5".
-        let digits = min(3, Int(max(1, (-log10(spacing)).rounded())))
+        // Enough decimal places to render this stride exactly (0.5 → 1,
+        // 0.25 → 2), then the digits after the whole second: 12.75 at a
+        // quarter-second stride must not print as "0:12.8".
+        let digits = decimalPlaces(for: spacing)
         let scale = pow(10.0, Double(digits))
         let fraction = Int((time * scale).rounded()) % Int(scale)
         guard fraction != 0 else { return clock }
         return String(format: "%@.%0\(digits)d", clock, fraction)
+    }
+
+    /// Smallest number of decimal places (1...3) that represents `spacing`
+    /// exactly, so tick labels never round away from the gridline they name.
+    private static func decimalPlaces(for spacing: TimeInterval) -> Int {
+        for digits in 1...3 {
+            let scaled = spacing * pow(10.0, Double(digits))
+            if abs(scaled - scaled.rounded()) < 1e-9 { return digits }
+        }
+        return 3
     }
 
     /// A span, not a position: `0.77s` reads where `0:00` would look like the

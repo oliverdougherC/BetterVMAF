@@ -250,28 +250,50 @@ struct QualityTimelineTests {
         #expect(QualityBand(vmafScore: 95.0) == .good)
         #expect(QualityBand(vmafScore: 94.9) == .fair)
         #expect(QualityBand(vmafScore: 89.99) == .poor)
-        // The same score is the same colour no matter which result it came from.
-        #expect(QualityScale.rgb(at: 99.1) == QualityScale.rgb(at: 99.1))
     }
 
-    @Test func colorRampStaysInsideTheScoreDomain() {
+    @Test func rampInterpolatesContinuouslyAndHonoursAnchors() {
+        // Regression: an early-return loop made every score snap to the next
+        // anchor's colour, so the ramp was an 8-step staircase and the 0 anchor
+        // was unreachable. Adjacent scores must differ...
+        #expect(QualityScale.rgb(at: 88.1) != QualityScale.rgb(at: 88.5))
+        #expect(QualityScale.rgb(at: 89.0) != QualityScale.rgb(at: 89.5))
+        #expect(QualityScale.rgb(at: 96.0) != QualityScale.rgb(at: 96.5))
+        // ...halfway between two anchors is their linear-light midpoint...
+        let mid = QualityScale.rgb(at: 89.0)
+        let a = QualityScale.rgb(at: 88.0)
+        let b = QualityScale.rgb(at: 90.0)
+        #expect(abs(mid.red - (a.red + b.red) / 2) < 0.001)
+        #expect(abs(mid.green - (a.green + b.green) / 2) < 0.001)
+        // ...anchors display exactly as authored (the table is sRGB, blending is
+        // linear, so a round trip through nsColor must return the authored byte).
+        func displayComponents(_ score: Double) -> (Double, Double, Double) {
+            let c = QualityScale.rgb(at: score).nsColor.usingColorSpace(.sRGB)!
+            return (Double(c.redComponent), Double(c.greenComponent), Double(c.blueComponent))
+        }
+        for (score, authored) in [(88.0, (0.89, 0.17, 0.16)), (90.0, (0.94, 0.45, 0.13)),
+                                  (97.0, (0.55, 0.79, 0.22)), (99.0, (0.18, 0.74, 0.32)),
+                                  (0.0, (0.55, 0.10, 0.10))] {
+            let got = displayComponents(score)
+            #expect(abs(got.0 - authored.0) < 1.0 / 255, "\(score) red \(got.0)")
+            #expect(abs(got.1 - authored.1) < 1.0 / 255, "\(score) green \(got.1)")
+            #expect(abs(got.2 - authored.2) < 1.0 / 255, "\(score) blue \(got.2)")
+        }
+    }
+
+    @Test func colorRampHeatsUpWithQuality() {
         // Regression: normalizing against a clip's min/max divided by zero when
         // every frame scored the same, and fell through to "excellent".
-        let low = QualityScale.rgb(at: 0)
-        let high = QualityScale.rgb(at: 100)
-        #expect(low != high)
-        // The ramp heats up as quality improves: red drains away monotonically,
-        // and green climbs through Poor→Fair→Good (then eases toward teal at a
-        // perfect 100, which is a colour decision, not an ordering bug).
-        let poor = QualityScale.rgb(at: 85)
+        #expect(QualityScale.rgb(at: 0) != QualityScale.rgb(at: 100))
+        // Across Fair→Good→Excellent the hue travels orange→yellow→green→teal:
+        // red drains monotonically, green climbs.
         let fair = QualityScale.rgb(at: 92.5)
         let good = QualityScale.rgb(at: 97)
         let excellent = QualityScale.rgb(at: 99.8)
-        #expect(poor.red > fair.red || abs(poor.red - fair.red) < 0.1)
         #expect(fair.red > good.red && good.red > excellent.red)
-        #expect(poor.green < fair.green && fair.green < good.green)
+        #expect(fair.green < good.green)
         // Every band gets its own colour: four distinct samples, no ties.
-        let sampled = [poor, fair, good, excellent]
+        let sampled = [QualityScale.rgb(at: 85), fair, good, excellent]
         #expect(Set(sampled).count == sampled.count)
     }
 
@@ -289,6 +311,26 @@ struct QualityTimelineTests {
         #expect(empty.nearestIndex(for: 3) == nil)
         #expect(empty.slice(covering: 0...10).isEmpty)
         #expect(empty.buckets(count: 100, covering: 0...10).isEmpty)
+    }
+
+    @Test func singleFrameWithNegativeTimestampStillRenders() {
+        // libvmaf numbers frames from zero, so `timestamp = (frameNum - 1) / 30`
+        // puts the only frame of a one-frame result at -0.0333s (CA-04). The
+        // domain fallback used to be `0...1`, which excluded it and drew a
+        // blank plot for real data.
+        let only = VMAFCalculator.FrameMetric(
+            frameNumber: 0, vmafScore: 91.25,
+            integerMotion: nil, integerMotion2: nil, integerAdm2: 0.95,
+            integerAdmScales: [0.9, 0.9, 0.9, 0.9],
+            integerVifScales: [0.9, 0.9, 0.9, 0.9])
+        let timeline = QualityTimeline(metrics: [only])
+        let domain = timeline.timeRange
+        #expect(domain.contains(timeline.time(at: 0)), "one-frame domain \(domain) excludes its frame")
+        #expect(domain.upperBound > domain.lowerBound)
+        #expect(timeline.slice(covering: domain).count == 1)
+        let buckets = timeline.buckets(count: 100, covering: domain)
+        #expect(buckets.reduce(0) { $0 + $1.frameCount } == 1)
+        #expect(buckets.first?.minScore == 91.25)
     }
 
     @Test func bucketsPreserveExactMinAndMaxAndCoverEveryFrame() {
@@ -341,7 +383,24 @@ struct QualityTimelineTests {
         let timeline = QualityTimeline(metrics: built)
         #expect(!timeline.isTimeMonotonic)
         #expect(timeline.nearestIndex(for: timeline.time(at: 5)) != nil)
-        #expect(timeline.buckets(count: 50, covering: timeline.timeRange).reduce(0) { $0 + $1.frameCount } >= 1)
+        let buckets = timeline.buckets(count: 50, covering: timeline.timeRange)
+        #expect(buckets.reduce(0) { $0 + $1.frameCount } == 200)
+        // The misordered frame (index 40, timestamp 0.133s, score 80) must be
+        // summarised in the column that actually contains its time; the old
+        // scan cursor filed it seconds away under whichever column it reached
+        // while the totals still added up.
+        let dipTime = timeline.time(at: 40)
+        let holder = buckets.filter { $0.minScore == 80.0 }
+        #expect(holder.count == 1)
+        #expect(holder[0].startTime <= dipTime)
+        #expect(dipTime <= holder[0].endTime)
+        #expect(holder[0].worstIndex == 40)
+        // Bucket time spans must not overlap and stay inside the window.
+        for (left, right) in zip(buckets, buckets.dropFirst()) {
+            #expect(right.startTime >= left.endTime - 0.0001)
+        }
+        #expect(buckets.first!.startTime >= timeline.timeRange.lowerBound)
+        #expect(buckets.last!.endTime <= timeline.timeRange.upperBound + 0.0001)
     }
 
     @Test func bandRunStopsAtABetterFrame() {
@@ -470,7 +529,6 @@ struct HeatmapViewportTests {
         let viewport = HeatmapViewport()
         viewport.setZoom(64, in: timeline, geometry: geometry)
         // `drag` takes the gesture's cumulative translation from its origin.
-        viewport.beginDrag()
         // A ~0.75s window across ~47s of clip needs a very long drag to reach
         // the end; 1M px overshoots, and the clamp must absorb it.
         viewport.drag(byPixels: -1_000_000, in: timeline, geometry: geometry)
@@ -481,7 +539,6 @@ struct HeatmapViewportTests {
         // within float dust rather than bit-for-bit.
         #expect(abs(domain.upperBound - timeline.timeRange.upperBound) < 0.0001)
 
-        viewport.beginDrag()
         viewport.drag(byPixels: 1_000_000, in: timeline, geometry: geometry)
         viewport.endDrag()
         domain = viewport.displayDomain(in: timeline, geometry: geometry)

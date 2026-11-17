@@ -76,22 +76,33 @@ enum QualityBand: String, CaseIterable, Identifiable {
 
 /// Continuous score → color ramp used by every quality visualization.
 ///
-/// Interpolation happens in linear light. SwiftUI's default `Perceptual`
-/// blend takes a muddy brownish path between hue-distinct anchors like orange
-/// and yellow, which is exactly the range most encodes occupy.
+/// Blending happens in linear light (see `RGB`). SwiftUI's default
+/// `Perceptual` blend takes a muddy brownish path between hue-distinct anchors
+/// like orange and yellow, which is exactly the range most encodes occupy.
 enum QualityScale {
+    /// An RGB color kept in **linear light**. Anchors are authored as sRGB and
+    /// decoded through `init(srgbRed:green:blue:)`, so `blend` interpolates in
+    /// linear light and only `nsColor` re-encodes for display.
     struct RGB: Equatable, Hashable {
         var red: Double
         var green: Double
         var blue: Double
 
+        /// Raw linear-light components.
         init(_ red: Double, _ green: Double, _ blue: Double) {
             self.red = red
             self.green = green
             self.blue = blue
         }
 
-        /// sRGB electro-optical transfer, so blending happens in linear light.
+        /// Author a color in the sRGB values a designer would pick.
+        init(srgbRed red: Double, green: Double, blue: Double) {
+            self.red = Self.decoded(red)
+            self.green = Self.decoded(green)
+            self.blue = Self.decoded(blue)
+        }
+
+        /// sRGB opto-electronic transfer: a display value back to linear light.
         static func decoded(_ channel: Double) -> Double {
             let c = max(0, min(1, channel))
             return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
@@ -123,35 +134,42 @@ enum QualityScale {
         var color: Color { Color(nsColor: nsColor) }
     }
 
-    /// Anchors in sRGB. The ramp saturates below 88 so very poor frames stay
-    /// inside the Poor red instead of inventing an undefined color.
-    private static let anchors: [(score: Double, rgb: RGB)] = [
-        (0, RGB(0.55, 0.10, 0.10)),
-        (88, RGB(0.89, 0.17, 0.16)),
-        (90, RGB(0.94, 0.45, 0.13)),
-        (93, RGB(0.96, 0.63, 0.15)),
-        (95, RGB(0.92, 0.80, 0.17)),
-        (97, RGB(0.55, 0.79, 0.22)),
-        (99, RGB(0.18, 0.74, 0.32)),
-        (100, RGB(0.10, 0.72, 0.47)),
+    /// Anchors, authored as the sRGB values a designer would pick. The ramp
+    /// saturates below 88 so very poor frames stay inside the Poor red instead
+    /// of inventing an undefined color.
+    private static let anchors: [(score: Double, srgb: (Double, Double, Double))] = [
+        (0, (0.55, 0.10, 0.10)),
+        (88, (0.89, 0.17, 0.16)),
+        (90, (0.94, 0.45, 0.13)),
+        (93, (0.96, 0.63, 0.15)),
+        (95, (0.92, 0.80, 0.17)),
+        (97, (0.55, 0.79, 0.22)),
+        (99, (0.18, 0.74, 0.32)),
+        (100, (0.10, 0.72, 0.47)),
     ]
+
+    /// Linear-light form of `anchors`, built once. `blend` runs in this space so
+    /// orange→yellow travels through a clean orange-gold instead of brown.
+    private static let linearAnchors: [(score: Double, rgb: RGB)] = anchors.map {
+        ($0.score, RGB(srgbRed: $0.srgb.0, green: $0.srgb.1, blue: $0.srgb.2))
+    }
 
     /// The score range the ramp is drawn across, so a legend and the plot
     /// cannot disagree about where a color starts.
     static let rampDomain = 80.0...100.0
 
     static func rgb(at score: Double) -> RGB {
-        let s = max(anchors.first!.score, min(anchors.last!.score, score))
-        for lower in anchors where lower.score >= s { return lower.rgb }
-        for index in 0..<(anchors.count - 1) {
-            let a = anchors[index]
-            let b = anchors[index + 1]
-            if s >= a.score && s <= b.score {
-                guard b.score > a.score else { return b.rgb }
+        let s = max(linearAnchors.first!.score, min(linearAnchors.last!.score, score))
+        for index in 0..<(linearAnchors.count - 1) {
+            let a = linearAnchors[index]
+            let b = linearAnchors[index + 1]
+            if s >= a.score, s <= b.score, b.score > a.score {
                 return RGB.blend(a.rgb, b.rgb, (s - a.score) / (b.score - a.score))
             }
         }
-        return anchors.last!.rgb
+        return s <= linearAnchors.first!.score
+            ? linearAnchors.first!.rgb
+            : linearAnchors.last!.rgb
     }
 
     static func color(at score: Double) -> Color { rgb(at: score).color }
