@@ -668,15 +668,17 @@ struct QualityTimelineTests {
         #expect(filled.frameCount == 2)
     }
 
-    @Test func cadenceIsTheMeasuredSampleSpacing() {
-        // F4 (round 3): marks may extend to the next sample but no further
-        // than the clip's actual cadence — the value the renderer caps with.
-        // Contiguous 30 fps data: exactly 1/30, so abutting bands are
-        // unchanged. A sparse --step result: its own spacing, honestly wide.
+    @Test func frameDurationIsTheSourceFrameInterval() {
+        // F1 (round 4): a sample's mark covers its own frame, not the wait
+        // for the next observation. frameDuration is Δtimestamp/ΔframeNumber —
+        // measured against the *source* timeline.
         let contiguous = QualityTimeline(metrics: frames([Double](repeating: 98.0, count: 300)))
-        #expect(abs(contiguous.medianFrameSpan - 1.0 / 30.0) < 0.0001)
+        #expect(abs(contiguous.frameDuration - 1.0 / 30.0) < 0.0001)
+        #expect(!contiguous.hasGap(after: 0))
+        #expect(!contiguous.hasGap(after: 298))
 
-        // Sampled every 100th frame: real cadence is 100/30.
+        // Sampled every 100th frame: each observation is still one 1/30s
+        // frame — the old code's 3.33s "cadence" painted every gap as data.
         var stepped: [VMAFCalculator.FrameMetric] = []
         for step in 0..<300 {
             stepped.append(VMAFCalculator.FrameMetric(
@@ -685,10 +687,15 @@ struct QualityTimelineTests {
                 integerAdmScales: [0.9, 0.9, 0.9, 0.9],
                 integerVifScales: [0.9, 0.9, 0.9, 0.9]))
         }
-        #expect(abs(QualityTimeline(metrics: stepped).medianFrameSpan - 100.0 / 30.0) < 0.01)
+        let sparse = QualityTimeline(metrics: stepped)
+        #expect(abs(sparse.frameDuration - 1.0 / 30.0) < 0.0001,
+                "every-100th-frame sampling reported \(sparse.frameDuration)s per frame — that is observation spacing, not frame duration")
+        for index in 0..<299 {
+            #expect(sparse.hasGap(after: index), "sample \(index) of a stepped clip reported no gap")
+        }
 
-        // One lone dropped sample inside contiguous data must not widen the
-        // cap: the median ignores it, so the gap renders as a gap.
+        // One dropped sample inside contiguous data: a real gap at exactly
+        // that joint, nowhere else.
         var holey: [VMAFCalculator.FrameMetric] = []
         for index in 0..<300 where index != 150 {  // frame 151 missing
             holey.append(VMAFCalculator.FrameMetric(
@@ -697,8 +704,70 @@ struct QualityTimelineTests {
                 integerAdmScales: [0.9, 0.9, 0.9, 0.9],
                 integerVifScales: [0.9, 0.9, 0.9, 0.9]))
         }
-        #expect(abs(QualityTimeline(metrics: holey).medianFrameSpan - 1.0 / 30.0) < 0.0001,
-                "a single dropped frame widened the mark cap and would paint over it")
+        let timeline = QualityTimeline(metrics: holey)
+        #expect(abs(timeline.frameDuration - 1.0 / 30.0) < 0.0001)
+        #expect(timeline.hasGap(after: 149), "the dropped frame's joint must read as a gap")
+        #expect(!timeline.hasGap(after: 148))
+        #expect(!timeline.hasGap(after: 150))
+    }
+
+    @Test func envelopeTrendBreaksAcrossUnmeasuredColumns() throws {
+        // F2 (round 4): buckets() omits empty columns, so joining all of them
+        // drew one straight mean line across a long unmeasured stretch — two
+        // dense sections at the ends of a gap read as one continuous encode.
+        // Two clusters 10 minutes apart at 30fps over 1350px columns.
+        var metrics: [VMAFCalculator.FrameMetric] = []
+        func add(_ start: Int, _ count: Int) {
+            for offset in 0..<count {
+                metrics.append(VMAFCalculator.FrameMetric(
+                    frameNumber: start + offset, vmafScore: 98.0,
+                    integerMotion: nil, integerMotion2: nil, integerAdm2: 0.95,
+                    integerAdmScales: [0.9, 0.9, 0.9, 0.9],
+                    integerVifScales: [0.9, 0.9, 0.9, 0.9]))
+            }
+        }
+        add(1, 1500)        // frames 1–1500: 0–50s
+        add(18001, 1500)    // frames 18001–19500: 600–650s
+        let timeline = QualityTimeline(metrics: metrics)
+        let buckets = timeline.buckets(count: 1350, covering: timeline.timeRange)
+        let runs = QualityTimeline.contiguousBucketRuns(of: buckets)
+        #expect(runs.count == 2, "two dense sections separated by 550s must not merge into one trend run")
+        #expect(runs[0].count > 1 && runs[1].count > 1)
+        // The column jump between the runs is the unmeasured middle.
+        let lastLeft = try #require(runs[0].last)
+        let firstRight = try #require(runs[1].first)
+        #expect(firstRight.column > lastLeft.column + 1)
+        // Contiguous data yields exactly one run (the fix must not chop
+        // normal clips).
+        let single = QualityTimeline(metrics: frames([Double](repeating: 98.0, count: 3000)))
+        #expect(QualityTimeline.contiguousBucketRuns(of: single.buckets(count: 1350, covering: single.timeRange)).count == 1)
+    }
+
+    @Test func statusDurationIsMeasuredNotPadded() {
+        // F3 (round 4): a single-frame result gets a synthetic one-second
+        // layout domain; the *duration* it reports must be one frame, not a
+        // fabricated 1.0s.
+        let lone = QualityTimeline(metrics: frames([98]))
+        #expect(lone.timeRange.upperBound - lone.timeRange.lowerBound == 1, "layout padding stays for drawing")
+        #expect(abs(lone.measuredDuration - 1.0 / 30.0) < 0.0001,
+                "a one-frame result reported \(lone.measuredDuration)s")
+
+        // Short clips: 10 frames occupy 10 frame durations, inclusive.
+        let short = QualityTimeline(metrics: frames([Double](repeating: 98.0, count: 10)))
+        #expect(abs(short.measuredDuration - 10.0 / 30.0) < 0.0001)
+
+        // A stepped result covers the source interval its frames span.
+        var stepped: [VMAFCalculator.FrameMetric] = []
+        for step in 0..<3 {
+            stepped.append(VMAFCalculator.FrameMetric(
+                frameNumber: step * 100 + 1, vmafScore: 98.0,
+                integerMotion: nil, integerMotion2: nil, integerAdm2: 0.95,
+                integerAdmScales: [0.9, 0.9, 0.9, 0.9],
+                integerVifScales: [0.9, 0.9, 0.9, 0.9]))
+        }
+        let sparse = QualityTimeline(metrics: stepped)
+        #expect(abs(sparse.measuredDuration - (200.0 / 30.0 + 1.0 / 30.0)) < 0.0001,
+                "frames 1, 101, 201 occupy the full source span they touch")
     }
 
     @Test func runSpanIncludesTheFinalFrameAndIdentifiesIsolatedRuns() throws {

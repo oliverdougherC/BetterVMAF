@@ -19,6 +19,11 @@ import Foundation
 struct QualityTimeline {
     /// One pixel column's summary of the frames that fall inside it.
     struct Bucket {
+        /// Which of the domain's equal-width columns this summarises. Buckets
+        /// exist only for occupied columns, so `column` tells whether two
+        /// neighbouring buckets are actually adjacent or separated by empty
+        /// (unmeasured) columns.
+        var column: Int
         var startTime: TimeInterval
         var endTime: TimeInterval
         /// Index range into `metrics`, so a tooltip can still name frames.
@@ -60,12 +65,13 @@ struct QualityTimeline {
     }
 
     let metrics: [VMAFCalculator.FrameMetric]
-    /// The clip's measured cadence: the median gap between consecutive samples,
-    /// in seconds (1/30 when there is nothing to measure). A mark may represent
-    /// the interval up to the next sample, but never more than this — otherwise
-    /// sparse or sampled results paint seconds that were never measured as if
-    /// they held the preceding frame's score.
-    let medianFrameSpan: TimeInterval
+    /// How long one **source frame** lasts — the duration a measurement
+    /// covers, distinct from how far apart observations sit. The median of
+    /// Δtimestamp/ΔframeNumber over sampled pairs, so a result analysed every
+    /// 100th frame still represents 1/30-second frames, not 3.33-second ones.
+    /// (The app's timestamps are currently synthetic 30 fps; the ratio keeps
+    /// its meaning when real per-frame PTS land under CA-04.)
+    let frameDuration: TimeInterval
     /// `QualityBand.allCases` index per frame, precomputed for run detection.
     let bandIndices: [Int]
     /// For each frame, the bounds of the longest span through it whose frames
@@ -106,11 +112,8 @@ struct QualityTimeline {
         }
         self.metrics = input
 
-        // Median gap between consecutive samples: the clip's measured cadence.
-        // Stride-capped so building a 1M-frame timeline stays linear-ish; the
-        // median of every 244th gap is the same number for any constant or
-        // near-constant frame rate.
-        medianFrameSpan = Self.measuredCadence(of: input)
+        // How long one source frame lasts: the duration a measurement covers.
+        frameDuration = Self.measuredFrameDuration(of: input)
 
         var builtBands: [Int] = []
         builtBands.reserveCapacity(input.count)
@@ -145,28 +148,31 @@ struct QualityTimeline {
         }
     }
 
-    /// Median consecutive-sample gap, capped to a bounded number of samples so
-    /// building a giant timeline stays cheap: for any constant or near-constant
-    /// frame rate, the median of a strided subset equals the true median.
-    ///
-    /// The median — not the mean — is the right statistic: uniform 30 fps data
-    /// gets exactly 1/30 so contiguous marks are unchanged, and one dropped
-    /// sample or a sparse stretch raises it no further than the clip's actual
-    /// cadence.
-    private static func measuredCadence(of metrics: [VMAFCalculator.FrameMetric]) -> TimeInterval {
+    /// Seconds per **source frame**: the median of Δtimestamp/ΔframeNumber
+    /// over sampled pairs. The denominator is the *source frame count* between
+    /// two observations, not the number of observations, so a result analysed
+    /// every 100th frame still reports 1/30-second frames — the interval
+    /// until the next observation says nothing about what each observation
+    /// covers. Median (robust to a dropped sample) and stride-capped so
+    /// building a 1M-frame timeline stays cheap; a strided median equals the
+    /// true median for any constant or near-constant frame rate.
+    private static func measuredFrameDuration(of metrics: [VMAFCalculator.FrameMetric]) -> TimeInterval {
         guard metrics.count > 1 else { return 1.0 / 30.0 }
         let stride = max(1, metrics.count / 4096)
-        var gaps: [TimeInterval] = []
-        gaps.reserveCapacity(metrics.count / stride + 1)
+        var perFrame: [TimeInterval] = []
+        perFrame.reserveCapacity(metrics.count / stride + 1)
         var index = stride
         while index < metrics.count {
-            let gap = (metrics[index].timestamp - metrics[index - stride].timestamp) / Double(stride)
-            if gap > 0 { gaps.append(gap) }
+            let dt = metrics[index].timestamp - metrics[index - stride].timestamp
+            let df = metrics[index].frameNumber - metrics[index - stride].frameNumber
+            if dt > 0, df > 0 { perFrame.append(dt / Double(df)) }
             index += stride
         }
-        gaps.sort()
-        guard !gaps.isEmpty else { return 1.0 / 30.0 }
-        return min(gaps[gaps.count / 2], 60)
+        guard !perFrame.isEmpty else { return 1.0 / 30.0 }
+        perFrame.sort()
+        // Clamp to [1ms, 1s]: a sane per-frame duration. Degenerate ratios
+        // (a constant timestamp, a wild VFR estimate) fall back sensibly.
+        return min(max(perFrame[perFrame.count / 2], 0.001), 1.0)
     }
 
     /// For each index, the widest span around it whose bands are all at or
@@ -307,7 +313,43 @@ struct QualityTimeline {
         guard metrics.indices.contains(run.lowerBound), metrics.indices.contains(run.upperBound) else {
             return 0
         }
-        return metrics[run.upperBound].timestamp - metrics[run.lowerBound].timestamp + medianFrameSpan
+        return metrics[run.upperBound].timestamp - metrics[run.lowerBound].timestamp + frameDuration
+    }
+
+    /// Whether an unmeasured interval follows the sample at `index`: the next
+    /// observation sits more than half again a frame's duration away, so some
+    /// source frames between them were never analysed (a dropped sample, or a
+    /// clip measured every Nth frame). The heat map leaves such gaps visually
+    /// distinct in every rendering mode instead of painting them as data.
+    func hasGap(after index: Int) -> Bool {
+        guard metrics.indices.contains(index + 1) else { return false }
+        return metrics[index + 1].timestamp - metrics[index].timestamp > frameDuration * 1.5
+    }
+
+    /// The wall-clock interval the analysed frames cover, inclusive of the
+    /// final frame. A single-frame result gets one frame — not the padded
+    /// one-second domain `timeRange` invents so a degenerate timeline still
+    /// has something to lay out. The status line reports this, not the
+    /// padding.
+    var measuredDuration: TimeInterval {
+        guard let first = metrics.first, let last = metrics.last else { return 0 }
+        return max(last.timestamp - first.timestamp + frameDuration, frameDuration)
+    }
+
+    /// Split occupied columns into maximal runs of *adjacent* ones. Buckets
+    /// exist only for columns that hold frames, so a jump in `column` means
+    /// one or more columns of the clip went completely unmeasured — a trend
+    /// line drawn straight across would invent data through the hole.
+    static func contiguousBucketRuns(of buckets: [Bucket]) -> [[Bucket]] {
+        var runs: [[Bucket]] = []
+        for bucket in buckets {
+            if let last = runs.last?.last, last.column + 1 == bucket.column {
+                runs[runs.count - 1].append(bucket)
+            } else {
+                runs.append([bucket])
+            }
+        }
+        return runs
     }
 
     // MARK: - Detail selection
@@ -421,6 +463,7 @@ struct QualityTimeline {
         result.reserveCapacity(columnCount)
         for column in 0..<columnCount where counts[column] > 0 {
             result.append(Bucket(
+                column: column,
                 startTime: domain.lowerBound + span * Double(column) / Double(columnCount),
                 endTime: domain.lowerBound + span * Double(column + 1) / Double(columnCount),
                 startIndex: firstIndex[column],

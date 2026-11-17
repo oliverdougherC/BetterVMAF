@@ -382,27 +382,34 @@ private struct HeatmapPlot: View {
             )
         }
 
-        let meanPath = Path { path in
-            for (position, bucket) in buckets.enumerated() {
-                let point = CGPoint(
-                    x: geometry.x(for: bucket.startTime, domain: domain) + columnWidth / 2,
-                    y: geometry.y(for: bucket.meanScore, domain: scoreDomain)
-                )
-                if position == 0 { path.move(to: point) } else { path.addLine(to: point) }
+        // The mean line runs per adjacent block of occupied columns. `buckets`
+        // omits empty columns entirely, so joining every point draws a
+        // straight trend line across a long unmeasured stretch — two dense
+        // sections at either end of a gap read as one continuous encode.
+        let meanPaths = QualityTimeline.contiguousBucketRuns(of: buckets).map { run in
+            Path { path in
+                for (position, bucket) in run.enumerated() {
+                    let point = CGPoint(
+                        x: geometry.x(for: bucket.startTime, domain: domain) + columnWidth / 2,
+                        y: geometry.y(for: bucket.meanScore, domain: scoreDomain)
+                    )
+                    if position == 0 { path.move(to: point) } else { path.addLine(to: point) }
+                }
             }
         }
         // Light: at this level neighbouring columns can differ by a whole point,
         // and a heavy line through them reads as a solid mass instead of a trend.
-        context.stroke(meanPath, with: .color(.primary.opacity(0.45)), lineWidth: 1)
+        for meanPath in meanPaths {
+            context.stroke(meanPath, with: .color(.primary.opacity(0.45)), lineWidth: 1)
+        }
     }
 
-    /// One rect per frame, each covering the interval up to the next sample —
-    /// but never more than the clip's measured cadence. Contiguous 30 fps data
-    /// marks exactly abut, so a zoomed view reads as one band; sparse or
-    /// sampled results (`--step`, dropped frames) get a real gap instead of
-    /// seconds that were never measured painted in the previous frame's score.
-    /// A dotted bridge across each gap keeps the clip's shape traceable without
-    /// claiming the missing interval holds either neighbour's score.
+    /// One rect per frame, each exactly one **source frame** wide — never the
+    /// interval until the next observation. Contiguous 30 fps data marks abut
+    /// into a continuous band at deep zoom; sampled results (`--step`, dropped
+    /// frames) leave their unmeasured seconds visibly empty, bridged by a
+    /// faint dotted line so the clip stays traceable without claiming the gap
+    /// holds either neighbour's score.
     private func drawExactFrames(_ context: inout GraphicsContext, plot: CGRect) {
         let range = timeline.slice(covering: domain)
         guard !range.isEmpty else { return }
@@ -418,10 +425,9 @@ private struct HeatmapPlot: View {
         }
         let sampleSpacing = points.count > 1 ? abs(points[1].x - points[0].x) : 0
         let pixelsPerSecond = geometry.dataWidth / CGFloat(max(0.0001, domain.upperBound - domain.lowerBound))
-        let cadence = max(2, CGFloat(timeline.medianFrameSpan) * pixelsPerSecond)
-        // A sample further from its neighbour than half again the cadence is a
+        // A sample further away than its own frame duration can explain is a
         // measured gap, not frame-rate rounding.
-        let gapThreshold = cadence * 1.5
+        let markWidth = max(2, CGFloat(timeline.frameDuration) * pixelsPerSecond)
 
         // Once frames are clearly separated, a faint trace through them keeps
         // the shape of the clip readable; the marks stay the primary evidence.
@@ -430,7 +436,7 @@ private struct HeatmapPlot: View {
         if sampleSpacing > 3, points.count > 1 {
             let trace = Path { path in
                 var runStart = 0
-                for position in 1..<points.count where points[position].x - points[position - 1].x > gapThreshold {
+                for position in 1..<points.count where timeline.hasGap(after: first + position - 1) {
                     path.addLines(points[runStart..<position].map { $0 })
                     runStart = position
                 }
@@ -442,19 +448,20 @@ private struct HeatmapPlot: View {
         for (position, index) in (first..<range.upperBound).enumerated() {
             let score = timeline.score(at: index)
             let x = points[position].x
-            let toNext = position + 1 < points.count ? max(2, points[position + 1].x - x) : cadence
-            // Square-edged and contiguous where samples are contiguous:
-            // rounding each mark's ends would notch between every pair and
-            // turn the band into scattered dots.
+            // A sample covers its own frame — one duration wide, never the
+            // interval until the next observation. Contiguous 30 fps data
+            // spaced closer than 2px keeps the 2px floor so the band still
+            // reads as continuous. Square-edged: rounding each mark's ends
+            // would notch between every pair and scatter the band into dots.
             context.fill(
-                Path(CGRect(x: x, y: points[position].y - height / 2, width: min(toNext, cadence), height: height)),
+                Path(CGRect(x: x, y: points[position].y - height / 2, width: markWidth, height: height)),
                 with: .color(QualityScale.color(at: score))
             )
-            if toNext > gapThreshold {
+            if timeline.hasGap(after: index), position + 1 < points.count {
                 let next = points[position + 1]
                 context.stroke(
                     Path { path in
-                        path.move(to: CGPoint(x: x + min(toNext, cadence), y: points[position].y))
+                        path.move(to: CGPoint(x: x + markWidth, y: points[position].y))
                         path.addLine(to: next)
                     },
                     with: .color(.primary.opacity(0.18)),
@@ -747,7 +754,11 @@ private struct HeatmapControls: View {
         let domain = viewport.displayDomain(in: timeline, geometry: geometry)
         let visible = timeline.slice(covering: domain).count
         guard viewport.isZoomed else {
-            return "\(timeline.frameCount) frames · \(TimeFormat.duration(domain.upperBound - domain.lowerBound))"
+            // The measured interval, not the padded layout domain: a
+            // single-frame result is one frame of video (~0.033s at 30fps),
+            // never the synthetic 1-second span the viewport invents so a
+            // degenerate timeline still has a window to draw.
+            return "\(timeline.frameCount) frames · \(TimeFormat.duration(timeline.measuredDuration))"
         }
         // At a sub-second window, whole-second bounds print as "0:47 to 0:47";
         // let the label spacing follow the window size.
