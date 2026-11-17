@@ -152,7 +152,6 @@ class AppcastTests(unittest.TestCase):
             self.verify()
         verify.assert_not_called()
 
-    @unittest.skipUnless(sys.platform == "darwin", "Uses the macOS CryptoKit verifier")
     def test_real_signature_rejects_modified_bytes(self):
         # RFC 8032 section 7.1, test 2. These are published test vectors.
         public_key = base64.b64encode(bytes.fromhex(
@@ -167,6 +166,15 @@ class AppcastTests(unittest.TestCase):
         self.dmg.write_bytes(b"\x73")
         with self.assertRaises(subprocess.CalledProcessError):
             release.verify_signature(public_key, self.dmg, signature)
+
+    def test_real_staging_feed_fixture_and_corruption(self):
+        fixture = release.ROOT / 'Fixtures/ReleaseStaging'
+        public = (fixture / 'public-key.txt').read_text().strip()
+        content = release.signed_feed_content(fixture / 'appcast.xml', public)
+        self.assertIn(b'http://localhost:18742/', content)
+        self.feed.write_bytes((fixture / 'appcast.xml').read_bytes().replace(b'Better VMAF', b'Other Video', 1))
+        with self.assertRaises(subprocess.CalledProcessError):
+            release.signed_feed_content(self.feed, public)
 
     def test_checksum_changes_when_archive_is_modified(self):
         before = release.checksum(self.dmg)

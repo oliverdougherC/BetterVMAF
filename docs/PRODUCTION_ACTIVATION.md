@@ -15,11 +15,11 @@
      [Apple's certificate procedure](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/).
    - In App Store Connect, open **Users and Access → Integrations → App Store Connect
      API → Team Keys → Generate API Key**. Request API access first if prompted. Use
-     a dedicated release key with access to notarization, download its `.p8` once,
+     a dedicated release key with **Developer** access (which permits notarization), download its `.p8` once,
      and record the key ID and issuer UUID. Keep a secure backup of the downloaded key.
      This pipeline passes `--issuer` and requires a **team** key; individual API keys
      are not supported by this setup.
-     [Apple's API-key procedure](https://developer.apple.com/documentation/appstoreconnectapi/creating-api-keys-for-app-store-connect-api).
+     [Apple's API-key procedure](https://developer.apple.com/documentation/appstoreconnectapi/creating-api-keys-for-app-store-connect-api) and [role permissions](https://developer.apple.com/help/account/access/roles/).
    See [Apple's notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
 3. Provision the remaining GitHub settings from this repository checkout. Enter
    passwords/identifiers interactively, without putting their values in shell history:

@@ -10,6 +10,7 @@ from pathlib import Path
 import plistlib
 import re
 import subprocess
+import sys
 from tempfile import TemporaryDirectory
 from urllib.parse import urlsplit
 import xml.etree.ElementTree as ET
@@ -172,25 +173,43 @@ def check_entitlements(app, mode):
 
 
 def verify_signature(public_key, path, signature):
-    subprocess.run(
-        ["xcrun", "swift", str(ROOT / "scripts/release/verify-ed25519.swift"),
-         public_key, str(path), signature], check=True,
-    )
+    check_base64(public_key, 32)
+    check_base64(signature, 64)
+    if sys.platform == "darwin":
+        subprocess.run(
+            ["xcrun", "swift", str(ROOT / "scripts/release/verify-ed25519.swift"),
+             public_key, str(path), signature], check=True,
+        )
+    else:
+        # RFC 8410 SubjectPublicKeyInfo header for an Ed25519 public key. Linux
+        # transport tests use OpenSSL; production macOS verification uses CryptoKit.
+        with TemporaryDirectory() as scratch:
+            key = Path(scratch) / "public.der"
+            sig = Path(scratch) / "signature"
+            key.write_bytes(bytes.fromhex("302a300506032b6570032100") + base64.b64decode(public_key))
+            sig.write_bytes(base64.b64decode(signature))
+            subprocess.run(["openssl", "pkeyutl", "-verify", "-pubin", "-keyform", "DER",
+                            "-inkey", str(key), "-rawin", "-in", str(path),
+                            "-sigfile", str(sig)], check=True)
 
 
-def verify_appcast(path, dmg, version, archive_url, public_key):
+def signed_feed_content(path, public_key):
     if path.stat().st_size > 16_384:
         raise ValueError("Unexpected appcast size")
     content, separator, trailer = path.read_bytes().rpartition(b"<!-- sparkle-signatures:\n")
     match = SIGNATURE.fullmatch(trailer)
     if not separator or not match or int(match[2]) != len(content):
         raise ValueError("Invalid Sparkle appcast signature block")
-    # Sparkle signs the XML bytes before its trailing comment. Verify these bytes
-    # before parsing and accept only the feed our renderer could have produced.
     with TemporaryDirectory() as scratch:
         unsigned_feed = Path(scratch) / "appcast.xml"
         unsigned_feed.write_bytes(content)
         verify_signature(public_key, unsigned_feed, match[1].decode("ascii"))
+    return content
+
+
+def verify_appcast(path, dmg, version, archive_url, public_key):
+    # Authenticate the XML bytes before parsing and require canonical metadata.
+    content = signed_feed_content(path, public_key)
     item = ET.fromstring(content).find("./channel/item")
     if item is None:
         raise ValueError("Missing Sparkle item")

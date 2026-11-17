@@ -5,6 +5,10 @@ on:
     types: [published]
   workflow_dispatch:
     inputs:
+      staging_transport_smoke:
+        description: Deploy only the signed staging fixture on Linux; requires the production channel to be inactive
+        type: boolean
+        default: false
       staging_package_run_id:
         description: Optional isolated Pages smoke test; successful unsigned package run ID; never deploys the root feed
         required: false
@@ -24,7 +28,7 @@ jobs:
       github.repository == 'oliverdougherC/BetterVMAF' &&
       ((github.event_name == 'release' && !github.event.release.prerelease &&
         startsWith(github.event.release.tag_name, 'v')) ||
-       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.staging_package_run_id == ''))
+       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.staging_package_run_id == '' && !inputs.staging_transport_smoke))
     runs-on: macos-15
     timeout-minutes: 20
     env:
@@ -71,8 +75,8 @@ jobs:
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
 
   smoke-prepare:
-    if: github.event_name == 'workflow_dispatch' && inputs.staging_package_run_id != ''
-    runs-on: macos-15
+    if: github.event_name == 'workflow_dispatch' && (inputs.staging_transport_smoke || inputs.staging_package_run_id != '')
+    runs-on: ${{ inputs.staging_package_run_id != '' && 'macos-15' || 'ubuntu-latest' }}
     timeout-minutes: 20
     permissions:
       contents: read
@@ -99,6 +103,7 @@ jobs:
               raise SystemExit('A production Sparkle release exists; staging Pages deployment is disabled')
           PY
       - name: Download and independently verify staging artifacts
+        if: inputs.staging_package_run_id != ''
         run: |
           [[ "$PACKAGE_RUN_ID" =~ ^[0-9]+$ ]]
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PACKAGE_RUN_ID" > "$RUNNER_TEMP/run.json"
@@ -114,6 +119,22 @@ jobs:
           mkdir -p "$RUNNER_TEMP/site/staging/release-readiness"
           cp "$RUNNER_TEMP/staging/new/appcast.xml" "$RUNNER_TEMP/site/staging/release-readiness/appcast.xml"
           cp "$RUNNER_TEMP/staging/staging-public-key.txt" "$RUNNER_TEMP/site/staging/release-readiness/public-key.txt"
+          test ! -e "$RUNNER_TEMP/site/appcast.xml"
+      - name: Verify and stage the real signed transport fixture
+        if: inputs.staging_package_run_id == ''
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys
+          sys.path.insert(0, 'scripts/release')
+          import release
+          root=pathlib.Path('Fixtures/ReleaseStaging')
+          content=release.signed_feed_content(root/'appcast.xml', (root/'public-key.txt').read_text().strip())
+          assert b'http://localhost:18742/' in content
+          assert release.STABLE_FEED.encode() not in content
+          PY
+          mkdir -p "$RUNNER_TEMP/site/staging/release-readiness"
+          cp Fixtures/ReleaseStaging/appcast.xml "$RUNNER_TEMP/site/staging/release-readiness/appcast.xml"
+          cp Fixtures/ReleaseStaging/public-key.txt "$RUNNER_TEMP/site/staging/release-readiness/public-key.txt"
           test ! -e "$RUNNER_TEMP/site/appcast.xml"
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
