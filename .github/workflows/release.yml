@@ -48,7 +48,7 @@ jobs:
   credentials:
     needs: validate
     if: >-
-      always() && ((github.event_name == 'push' && needs.validate.result == 'success') ||
+      !cancelled() && ((github.event_name == 'push' && needs.validate.result == 'success') ||
       (github.event_name == 'workflow_dispatch' && inputs.mode == 'production-preflight' && github.ref == 'refs/heads/main'))
     environment: release-signing
     runs-on: macos-15
@@ -74,12 +74,12 @@ jobs:
   ci:
     needs: [validate, credentials]
     if: >-
-      always() && ((github.event_name == 'workflow_dispatch' && inputs.mode != 'production-preflight') ||
+      !cancelled() && ((github.event_name == 'workflow_dispatch' && inputs.mode != 'production-preflight') ||
       needs.credentials.result == 'success')
     uses: ./.github/workflows/ci.yml
 
   dry-run:
-    if: always() && needs.ci.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.mode != 'production-preflight'
+    if: ${{ !cancelled() && needs.ci.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.mode != 'production-preflight' }}
     needs: ci
     runs-on: macos-15
     timeout-minutes: 25
@@ -99,7 +99,7 @@ jobs:
 
   sign:
     if: >-
-      always() && needs.ci.result == 'success' &&
+      !cancelled() && needs.ci.result == 'success' &&
       ((github.event_name == 'push' && needs.validate.result == 'success') ||
        (github.event_name == 'workflow_dispatch' && inputs.mode == 'production-preflight' && github.ref == 'refs/heads/main'))
     needs: [validate, ci]
@@ -164,7 +164,7 @@ jobs:
             "package/$dmg" "package/$dmg.sha256" package/appcast.xml
 
   staging:
-    if: always() && needs.dry-run.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.mode != 'production-preflight'
+    if: ${{ !cancelled() && needs.dry-run.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.mode != 'production-preflight' }}
     needs: dry-run
     runs-on: macos-15
     timeout-minutes: 35
@@ -184,7 +184,7 @@ jobs:
           retention-days: 3
 
   verify-staging-transfer:
-    if: always() && needs.staging.result == 'success'
+    if: ${{ !cancelled() && needs.staging.result == 'success' }}
     needs: staging
     runs-on: macos-15
     timeout-minutes: 15
