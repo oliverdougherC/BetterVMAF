@@ -19,4 +19,4 @@ of BetterVMAF's MIT license. Upstream source links alone are not a complete
 corresponding-source distribution for these specific prebuilt binaries.
 
 Netflix VMAF models: https://github.com/Netflix/vmaf
-License: VMAF-LICENSE.txt and VMAF-PATENTS.txt (included in this app).
+License: VMAF-LICENSE.txt (includes the patent grant) (included in this app).
