@@ -219,7 +219,12 @@ struct ExportTests {
             headers: ["Frame", "Time", "VMAF", "Motion (integer_motion2)", "ADM2"], font: font)
         #expect(widths.count == 5)
         #expect(widths[3] > 150) // the long header gets its own space
-        #expect(widths.reduce(0, +) < 612 - 48 - 36) // fits one US Letter page
+        // Broken into locals: the CI toolchain (Xcode 16.4) could not
+        // type-check `widths.reduce(0, +) < 612 - 48 - 36` inside the
+        // #expect macro in reasonable time.
+        let totalWidth: CGFloat = widths.reduce(0) { $0 + $1 }
+        let letterContentWidth: CGFloat = 612 - 48 - 36 // fits one US Letter page
+        #expect(totalWidth < letterContentWidth)
         // Every column is at least as wide as its own text plus padding.
         for (header, width) in zip(["Frame", "Time", "VMAF", "Motion (integer_motion2)", "ADM2"], widths) {
             let text = (header as NSString).size(withAttributes: [.font: font]).width
@@ -772,9 +777,6 @@ struct QualityTimelineTests {
         }
         return [ns.redComponent, ns.greenComponent, ns.blueComponent]
     }
-
-    /// `#require` in a value context without throwing from helper chains.
-    private func XCTUnwrapShim<T>(_ value: T?) -> T? { value }
 
     @Test func everyTickStrideLabelsItsOwnGridline() {
         // Regression: the 0.25 s stride printed one decimal place, so a
