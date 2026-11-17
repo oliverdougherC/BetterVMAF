@@ -62,32 +62,53 @@ struct QualityTimeline {
     let metrics: [VMAFCalculator.FrameMetric]
     /// `QualityBand.allCases` index per frame, precomputed for run detection.
     let bandIndices: [Int]
+    /// For each frame, the bounds of the longest span through it whose frames
+    /// all sit in that frame's band or worse. Precomputed with a monotonic stack
+    /// so hover is O(1): walking the run per pointer update is O(run length),
+    /// which on a million-frame clip of consistent quality is the whole clip.
+    private let runLeft: [Int]
+    private let runRight: [Int]
     /// Smallest and largest score in the result and the index of the lowest,
     /// computed once instead of re-scanned per rendered mark.
     let scoreRange: ClosedRange<Double>
     let worstIndex: Int?
-    /// True when timestamps never decrease, which is what makes the binary
-    /// searches below valid. A non-monotonic result scans linearly instead.
-    let isTimeMonotonic: Bool
+    /// Identity of the analysis these frames came from. Copies of a timeline
+    /// share it; a freshly built result does not. Lets the view detect a
+    /// swapped-in comparison and drop zoom state that belongs to the previous
+    /// video instead of inheriting it.
+    let analysisID = UUID()
 
     private let cache = Cache()
 
     init(metrics: [VMAFCalculator.FrameMetric]) {
-        self.metrics = metrics
+        // libvmaf emits frames in presentation order. When it does not
+        // (sampling, a decoder that reorders), sort first: the time axis, the
+        // binary searches, and every aggregation below all assume it, and the
+        // alternative — each mode silently disagreeing about which frames are
+        // visible — shows a frame at one zoom and loses it at the next.
+        var input = metrics
+        if let first = input.first {
+            var ordered = true
+            var previous = first.timestamp
+            for metric in input.dropFirst() {
+                if metric.timestamp < previous { ordered = false; break }
+                previous = metric.timestamp
+            }
+            if !ordered {
+                input.sort { lhs, rhs in lhs.timestamp < rhs.timestamp }
+            }
+        }
+        self.metrics = input
 
         var builtBands: [Int] = []
-        builtBands.reserveCapacity(metrics.count)
+        builtBands.reserveCapacity(input.count)
         var minScore = Double.greatestFiniteMagnitude
         var maxScore = -Double.greatestFiniteMagnitude
         var worst: Int?
-        var monotonic = true
-        var previousTime: TimeInterval?
 
-        for (index, metric) in metrics.enumerated() {
+        for (index, metric) in input.enumerated() {
             let score = metric.vmafScore
             builtBands.append(QualityBand(vmafScore: score).caseIndex)
-            if let previousTime, metric.timestamp < previousTime { monotonic = false }
-            previousTime = metric.timestamp
             if score < minScore {
                 minScore = score
                 worst = index
@@ -97,9 +118,11 @@ struct QualityTimeline {
 
         bandIndices = builtBands
         worstIndex = worst
-        isTimeMonotonic = monotonic
+        let runs = Self.bandRuns(for: builtBands)
+        runLeft = runs.left
+        runRight = runs.right
 
-        if metrics.isEmpty {
+        if input.isEmpty {
             scoreRange = QualityScale.rampDomain
         } else if minScore == maxScore {
             // A constant-quality clip gets a padded domain instead of the
@@ -108,6 +131,34 @@ struct QualityTimeline {
         } else {
             scoreRange = minScore...maxScore
         }
+    }
+
+    /// For each index, the widest span around it whose bands are all at or
+    /// below that index's band. The span ends at the nearest frame in each
+    /// direction whose band is strictly *better*, so those boundaries are the
+    /// previous/next-greater-element positions — found for every index in one
+    /// linear pass with a monotonic stack, replacing a per-hover walk that was
+    /// O(run length).
+    private static func bandRuns(for bands: [Int]) -> (left: [Int], right: [Int]) {
+        let count = bands.count
+        var left = [Int](repeating: 0, count: count)
+        var right = [Int](repeating: 0, count: count)
+        var stack: [Int] = []
+
+        for index in 0..<count {
+            // Keep only frames strictly better than this one; the nearest such
+            // frame is where a "this band or worse" run must stop.
+            while let top = stack.last, bands[top] <= bands[index] { stack.removeLast() }
+            left[index] = stack.last.map { $0 + 1 } ?? 0
+            stack.append(index)
+        }
+        stack.removeAll(keepingCapacity: true)
+        for index in stride(from: count - 1, through: 0, by: -1) {
+            while let top = stack.last, bands[top] <= bands[index] { stack.removeLast() }
+            right[index] = stack.last.map { $0 - 1 } ?? count - 1
+            stack.append(index)
+        }
+        return (left, right)
     }
 
     // MARK: - Samples
@@ -131,9 +182,9 @@ struct QualityTimeline {
 
     // MARK: - Index by time
 
-    /// First sample index whose timestamp is >= `time`.
+    /// First sample index whose timestamp is >= `time`. `init` normalizes the
+    /// sample order, so the binary search is always valid.
     func lowerBound(for time: TimeInterval) -> Int {
-        guard isTimeMonotonic, !metrics.isEmpty else { return linearLowerBound(for: time) }
         var low = 0
         var high = metrics.count
         while low < high {
@@ -143,45 +194,45 @@ struct QualityTimeline {
         return low
     }
 
-    private func linearLowerBound(for time: TimeInterval) -> Int {
-        for (index, metric) in metrics.enumerated() where metric.timestamp >= time { return index }
-        return metrics.count
-    }
-
     /// Index of the sample nearest `time`, or nil when empty.
     func nearestIndex(for time: TimeInterval) -> Int? {
         guard !metrics.isEmpty else { return nil }
-        guard isTimeMonotonic else {
-            var best = 0
-            var bestDistance = TimeInterval.greatestFiniteMagnitude
-            for index in metrics.indices {
-                let distance = abs(metrics[index].timestamp - time)
-                if distance < bestDistance {
-                    bestDistance = distance
-                    best = index
-                }
-            }
-            return best
-        }
         let bound = lowerBound(for: time)
         if bound <= 0 { return 0 }
         if bound >= metrics.count { return metrics.count - 1 }
         return (time - metrics[bound - 1].timestamp <= metrics[bound].timestamp - time) ? bound - 1 : bound
     }
 
-    /// Longest run through `index` whose frames all sit in that frame's band or
-    /// *worse* — the interval a quality concern should point at. Bands are
-    /// ordered poor → excellent, so worse means a lower index, and a frame
-    /// already in the top band has no concern interval to escalate.
+    /// The frame a pointer at `(time, score)` is pointing at, given the
+    /// summarized column under it.
+    ///
+    /// Horizontal position alone is not enough once a column summarizes many
+    /// frames: a bucket of 49 frames at 98 and one at 70 draws a spike, and
+    /// time-only selection reports one of the 98s while the cursor sits on the
+    /// 70 mark. Within the column the cursor's score picks the frame, so the
+    /// tooltip names the marker it is actually on; at the bottom of the column
+    /// that is `worstIndex`, the bad frame the dip was drawn for.
+    func nearestIndex(in bucket: Bucket, toScore score: Double) -> Int {
+        var best = bucket.worstIndex
+        var bestDistance = Double.greatestFiniteMagnitude
+        for index in bucket.startIndex..<max(bucket.startIndex + 1, bucket.endIndex) {
+            let distance = abs(metrics[index].vmafScore - score)
+            if distance < bestDistance {
+                bestDistance = distance
+                best = index
+            }
+        }
+        return best
+    }
+
+    /// The widest span through `index` whose frames all sit in that frame's
+    /// band or worse — the interval a quality concern should point at. Looked
+    /// up from precomputed boundaries; see `bandRuns(for:)`.
     func bandRun(containing index: Int) -> ClosedRange<Int>? {
         guard bandIndices.indices.contains(index) else { return nil }
-        let band = bandIndices[index]
-        guard band < (QualityBand.excellent.caseIndex) else { return nil }
-        var start = index
-        while start > 0, bandIndices[start - 1] <= band { start -= 1 }
-        var end = index
-        while end + 1 < bandIndices.count, bandIndices[end + 1] <= band { end += 1 }
-        return start...end
+        // A frame already in the top band has no concern interval to escalate.
+        guard bandIndices[index] < QualityBand.excellent.caseIndex else { return nil }
+        return runLeft[index]...runRight[index]
     }
 
     // MARK: - Detail selection
@@ -244,9 +295,9 @@ struct QualityTimeline {
     /// a cursor silently files a frame under a column seconds away from its
     /// real time. Membership is therefore always the set of frames whose
     /// timestamp falls in the column, and `frameCount`/min/max/mean/worst are
-    /// exact. `startIndex`/`endIndex` are the first and last frame *positions*
-    /// represented; in-order data — every result libvmaf produces — makes them
-    /// contiguous, so no caller has to care.
+    /// exact. `init` normalizes sample order, so `startIndex..<endIndex` is
+    /// contiguous — `grid` and `slice` bin by the same timestamp arithmetic and
+    /// all three modes see exactly the same frames.
     func buckets(count columns: Int, covering domain: ClosedRange<TimeInterval>) -> [Bucket] {
         guard !metrics.isEmpty, columns > 0 else { return [] }
         let columnCount = min(columns, max(1, metrics.count))
@@ -256,11 +307,9 @@ struct QualityTimeline {
         let span = domain.upperBound - domain.lowerBound
         guard span > 0 else { return [] }
 
-        // In-order data (everything libvmaf emits) can be scanned from just the
-        // window, so a drag step costs O(frames in view); out-of-order results
-        // are rare enough to afford a full pass, which is what correctness needs
-        // since a binary search cannot bound them.
-        let scan: Range<Int> = isTimeMonotonic ? slice(covering: domain) : 0..<metrics.count
+        // In-order data can be scanned from just the window, so a drag step
+        // costs O(frames in view).
+        let scan = slice(covering: domain)
 
         // Accumulate min/max/mean per column in one pass, no sorting.
         var minimum = [Double](repeating: .greatestFiniteMagnitude, count: columnCount)
@@ -373,14 +422,17 @@ struct QualityTimeline {
 
     /// The bucket covering `index` at a given detail level, for the tooltip.
     func bucket(coveringIndex index: Int, columns: Int, domain: ClosedRange<TimeInterval>) -> Bucket? {
-        guard metrics.indices.contains(index),
-              let layout = columnLayout(for: metrics[index].timestamp, columns: columns, domain: domain)
-        else { return nil }
+        guard metrics.indices.contains(index) else { return nil }
+        return bucket(coveringTime: metrics[index].timestamp, columns: columns, domain: domain)
+    }
+
+    /// The bucket a timestamp falls into, without going through a frame index.
+    func bucket(coveringTime time: TimeInterval, columns: Int, domain: ClosedRange<TimeInterval>) -> Bucket? {
+        guard let layout = columnLayout(for: time, columns: columns, domain: domain) else { return nil }
         let built = buckets(count: layout.columnCount, covering: domain)
         let span = domain.upperBound - domain.lowerBound
         // The frame was counted into its own column's bucket by the same
-        // arithmetic, so match that column's start directly — no reliance on
-        // index contiguity, which out-of-order frames break.
+        // arithmetic, so match that column's start directly.
         let target = domain.lowerBound + span * Double(layout.column) / Double(layout.columnCount)
         if let exact = built.first(where: { $0.startTime == target }) { return exact }
         return built.min { abs($0.startTime - target) < abs($1.startTime - target) }

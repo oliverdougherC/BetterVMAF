@@ -374,33 +374,45 @@ struct QualityTimelineTests {
         }
     }
 
-    @Test func nonMonotonicTimesStillResolve() {
-        // Sampling can emit out-of-order frames; the plot must not crash or
-        // silently pick a wrong index.
-        var built = frames((0..<200).map { _ in 96.0 })
-        built[40] = VMAFCalculator.FrameMetric(frameNumber: 5, vmafScore: 80.0, integerMotion: nil,
-            integerMotion2: nil, integerAdm2: 0.9, integerAdmScales: [0.9,0.9,0.9,0.9], integerVifScales: [0.9,0.9,0.9,0.9])
-        let timeline = QualityTimeline(metrics: built)
-        #expect(!timeline.isTimeMonotonic)
-        #expect(timeline.nearestIndex(for: timeline.time(at: 5)) != nil)
-        let buckets = timeline.buckets(count: 50, covering: timeline.timeRange)
-        #expect(buckets.reduce(0) { $0 + $1.frameCount } == 200)
-        // The misordered frame (index 40, timestamp 0.133s, score 80) must be
-        // summarised in the column that actually contains its time; the old
-        // scan cursor filed it seconds away under whichever column it reached
-        // while the totals still added up.
-        let dipTime = timeline.time(at: 40)
-        let holder = buckets.filter { $0.minScore == 80.0 }
-        #expect(holder.count == 1)
-        #expect(holder[0].startTime <= dipTime)
-        #expect(dipTime <= holder[0].endTime)
-        #expect(holder[0].worstIndex == 40)
-        // Bucket time spans must not overlap and stay inside the window.
-        for (left, right) in zip(buckets, buckets.dropFirst()) {
-            #expect(right.startTime >= left.endTime - 0.0001)
+    @Test func outOfOrderInputIsNormalizedAndEveryModeAgrees() {
+        // Sampling can emit frames out of presentation order. The exact-frame,
+        // density, and envelope modes must not disagree about which frames are
+        // in the window: a frame that draws at one zoom must not vanish at the
+        // next. The timeline normalizes order at init, so all three reads
+        // agree on this fixture (frame timestamps are derived: frameNum 1 → 0s,
+        // 41 → 1.33s, 61 → 2s, 91 → 3s, 121 → 4s, fed in shuffled order).
+        func frame(_ number: Int, score: Double) -> VMAFCalculator.FrameMetric {
+            VMAFCalculator.FrameMetric(
+                frameNumber: number, vmafScore: score,
+                integerMotion: nil, integerMotion2: nil, integerAdm2: 0.95,
+                integerAdmScales: [0.9, 0.9, 0.9, 0.9],
+                integerVifScales: [0.9, 0.9, 0.9, 0.9])
         }
-        #expect(buckets.first!.startTime >= timeline.timeRange.lowerBound)
-        #expect(buckets.last!.endTime <= timeline.timeRange.upperBound + 0.0001)
+        let timeline = QualityTimeline(metrics: [
+            frame(1, score: 95), frame(91, score: 95), frame(41, score: 82),
+            frame(61, score: 95), frame(121, score: 95),
+        ])
+        // Sorted by time: 0, 1.33, 2, 3, 4 — the 82-scoring frame moved.
+        #expect(timeline.frameNumber(at: 0) == 1)
+        #expect(timeline.frameNumber(at: 1) == 41)
+        #expect(timeline.frameNumber(at: 2) == 61)
+
+        // The reviewer's repro window 1.8...2.2 holds exactly the frame at 2s.
+        let window = 1.8...2.2
+        #expect(timeline.slice(covering: window).contains { timeline.time(at: $0) == 2 })
+        let grid = timeline.grid(columns: 10, bins: 20, domain: window, scoreDomain: 80...100)
+        #expect(grid.cells.reduce(0) { $0 + $1.count } == 1, "density mode lost the window")
+        let buckets = timeline.buckets(count: 10, covering: window)
+        #expect(buckets.reduce(0) { $0 + $1.frameCount } == 1, "envelope mode lost the window")
+
+        // Full-clip summaries still count every frame exactly once, and the
+        // out-of-order 82 lands in the column containing 1.33s.
+        let all = timeline.buckets(count: 50, covering: timeline.timeRange)
+        #expect(all.reduce(0) { $0 + $1.frameCount } == 5)
+        let holder = all.filter { $0.minScore == 82 }
+        #expect(holder.count == 1)
+        #expect(holder[0].startTime <= 1.34 && 1.34 <= holder[0].endTime)
+        #expect(timeline.time(at: holder[0].worstIndex) == 40.0 / 30.0)
     }
 
     @Test func bandRunStopsAtABetterFrame() {
@@ -423,6 +435,72 @@ struct QualityTimelineTests {
         #expect(mixed.bandRun(containing: 5) == 5...7)   // Fair-or-worse stretch
         #expect(mixed.bandRun(containing: 6) == 6...6)   // the Poor frame alone
         #expect(mixed.bandRun(containing: 7) == 5...7)
+    }
+
+    @Test func precomputedRunsMatchWalkingTheArray() {
+        // bandRun now reads a table built at init; it must agree with the
+        // straightforward definition for every index of a jagged clip, or the
+        // tooltip's interval is wrong somewhere.
+        var scores: [Double] = []
+        var seed: UInt64 = 42
+        for _ in 0..<600 {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            scores.append(84 + Double((seed >> 11) % 1600) / 100)  // 84...100
+        }
+        let timeline = QualityTimeline(metrics: frames(scores))
+        for index in scores.indices {
+            let band = QualityBand(vmafScore: scores[index]).caseIndex
+            var expected: ClosedRange<Int>? = nil
+            if band < QualityBand.excellent.caseIndex {
+                var start = index
+                while start > 0, QualityBand(vmafScore: scores[start - 1]).caseIndex <= band { start -= 1 }
+                var end = index
+                while end + 1 < scores.count, QualityBand(vmafScore: scores[end + 1]).caseIndex <= band { end += 1 }
+                expected = start...end
+            }
+            #expect(timeline.bandRun(containing: index) == expected, "run mismatch at \(index)")
+        }
+    }
+
+    @Test func scorePicksTheSpikeInsideADenseColumn() throws {
+        // The core workflow: a column of 49 frames at 98 and one at 70 draws a
+        // spike, and pointing at the spike must name the 70 — the bad frame —
+        // not one of the 98s at the same horizontal position.
+        var scores = [Double](repeating: 98.0, count: 49)
+        scores.append(70.0)
+        let timeline = QualityTimeline(metrics: frames(scores))
+        let domain = timeline.timeRange
+        let bucket = try #require(timeline.buckets(count: 1, covering: domain).first)
+        #expect(bucket.frameCount == 50)
+        let worst = timeline.nearestIndex(in: bucket, toScore: 70.2)
+        #expect(timeline.score(at: worst) == 70.0, "hover at the dip named \(timeline.score(at: worst))")
+        // Pointer at the top of the same column still names a 98-scoring frame.
+        let top = timeline.nearestIndex(in: bucket, toScore: 97.9)
+        #expect(timeline.score(at: top) == 98.0)
+    }
+
+    @Test func hoverPathStaysFlatOnGiantConsistentClips() {
+        // The reviewer's benchmark case: a 300k-frame clip of *consistent*
+        // quality is one enormous band run, so a per-hover walk of the run
+        // (the old bandRun, or any min-scan of it) is O(clip) per pointer
+        // update — the exact quadratic-ish hover lag this PR set out to fix.
+        // bandRun now reads a precomputed table, and the tooltip labels by the
+        // hovered band instead of scanning the run, so lookups are O(1).
+        // 5,000 hovers over 300k frames are microseconds now; the budget only
+        // trips if someone reintroduces a per-hover scan (which measured
+        // seconds in Debug before the fix).
+        let timeline = QualityTimeline(metrics: frames(Array(repeating: 96.0, count: 300_000)))
+        guard timeline.bandIndices.first == QualityBand.good.caseIndex else {
+            Issue.record("fixture should be uniformly Good"); return
+        }
+        let start = ContinuousClock.now
+        var totalRun = 0
+        for step in stride(from: 0, to: 300_000, by: 60) {
+            totalRun += timeline.bandRun(containing: step)?.count ?? 0
+        }
+        #expect(totalRun == 5_000 * 300_000, "every hover should see the full run")
+        let elapsed = ContinuousClock.now - start
+        #expect(elapsed < .seconds(2), "hover-path run lookup took \(elapsed); bandRun regressed to a walk")
     }
 
     @Test func detailLevelDowngradesAsFramesPerPixelGrow() {
@@ -489,6 +567,37 @@ struct QualityTimelineTests {
         #expect(TimeFormat.exact(3725.25) == "1:02:05.250")
         // The app's known negative first timestamp stays well-formed.
         #expect(TimeFormat.exact(-0.0333) == "-0:00.033")
+    }
+
+    @Test func everyTickStrideLabelsItsOwnGridline() {
+        // Regression: the 0.25 s stride printed one decimal place, so a
+        // gridline at 12.75 s was labelled "0:12.8" — a label 0.05 s away from
+        // the thing it names. Every sub-second stride must round-trip exactly.
+        for spacing in [0.1, 0.2, 0.25, 0.5] as [TimeInterval] {
+            let first = ceil(12.0 / spacing) * spacing
+            for step in 0..<4 {
+                let tick = ((first + Double(step) * spacing) * 1000).rounded() / 1000
+                let label = TimeFormat.string(tick, spacing: spacing)
+                guard let parsed = parseClock(label) else {
+                    Issue.record("\(tick) printed as unparseable \(label)")
+                    continue
+                }
+                #expect(abs(parsed - tick) < 0.0005,
+                        "stride \(spacing): label \(label) is not at \(tick)")
+            }
+        }
+        // Whole-second strides keep the plain clock form.
+        #expect(TimeFormat.string(12.0, spacing: 1) == "0:12")
+        #expect(TimeFormat.string(60.0, spacing: 30) == "1:00")
+    }
+
+    /// Inverse of `TimeFormat.string` for a value under an hour ("m:ss(.…)").
+    private func parseClock(_ label: String) -> TimeInterval? {
+        let parts = label.split(separator: ":")
+        guard parts.count == 2, let minutes = Double(parts[0]), let seconds = Double(parts[1]) else {
+            return nil
+        }
+        return minutes * 60 + seconds
     }
 }
 
@@ -564,6 +673,52 @@ struct HeatmapViewportTests {
         let domain = viewport.displayDomain(in: timeline, geometry: geometry)
         // The finest window still shows a hoverable handful of frames.
         #expect(timeline.slice(covering: domain).count >= 2)
+    }
+
+    @Test func pinchReversalRestoresTheOriginalWindow() {
+        // The anchor and start state must be captured when the gesture begins:
+        // reading the live window each update made the result depend on the
+        // path, so 0.5 → 0.25 → 0.5 could land somewhere a direct 0.5 would
+        // not, and never landed back where the pinch started.
+        let timeline = QualityTimeline(metrics: frames(1439))
+        let viewport = HeatmapViewport()
+        viewport.setZoom(4, in: timeline, geometry: geometry)
+        let start = viewport.displayDomain(in: timeline, geometry: geometry)
+
+        viewport.pinch(to: 0.5, in: timeline, geometry: geometry)
+        viewport.pinch(to: 0.25, in: timeline, geometry: geometry)
+        viewport.pinch(to: 0.5, in: timeline, geometry: geometry)
+        let reversed = viewport.displayDomain(in: timeline, geometry: geometry)
+        viewport.endPinch()
+
+        let direct = HeatmapViewport()
+        direct.setZoom(4, in: timeline, geometry: geometry)
+        direct.pinch(to: 0.5, in: timeline, geometry: geometry)
+        let oneShot = direct.displayDomain(in: timeline, geometry: geometry)
+        direct.endPinch()
+
+        #expect(abs(reversed.lowerBound - oneShot.lowerBound) < 0.001,
+                "pinch path changed the window: \(reversed) vs \(oneShot)")
+        // A full reversal returns exactly the window the gesture began on.
+        // `MagnificationGesture` reports a cumulative scale from the gesture's
+        // start, so undoing a pinch means coming back to 1.0, not multiplying.
+        let roundTrip = HeatmapViewport()
+        roundTrip.setZoom(4, in: timeline, geometry: geometry)
+        roundTrip.pinch(to: 0.6, in: timeline, geometry: geometry)
+        roundTrip.pinch(to: 1.0, in: timeline, geometry: geometry)
+        let back = roundTrip.displayDomain(in: timeline, geometry: geometry)
+        #expect(abs(back.lowerBound - start.lowerBound) < 0.001)
+        #expect(abs(back.upperBound - start.upperBound) < 0.001)
+    }
+
+    @Test func eachResultCarriesItsOwnAnalysisIdentity() {
+        // The view keys its viewport reset off this: copies of one timeline
+        // must keep the identity (a re-render is not a new analysis), and a
+        // freshly built result must not share it with the previous one.
+        let metrics = frames(300)
+        let timeline = QualityTimeline(metrics: metrics)
+        #expect(timeline.analysisID == timeline.analysisID)
+        #expect(timeline.analysisID != QualityTimeline(metrics: metrics).analysisID)
     }
 
     @Test func degenerateAndEmptyResultsStayFinite() {

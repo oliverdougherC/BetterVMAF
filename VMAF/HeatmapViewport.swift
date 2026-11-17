@@ -45,7 +45,7 @@ final class HeatmapViewport {
     /// Pointer inside the plot, in plot coordinates; nil when outside.
     var cursorLocation: CGPoint?
     private var dragStart: (offset: Double, zoom: Double)?
-    private var pinchStart: (offset: Double, zoom: Double)?
+    private var pinchStart: (offset: Double, zoom: Double, center: TimeInterval)?
 
     /// Zoom past which a pixel column is narrower than one frame: more zoom
     /// shows no new information. Capped so a degenerate width cannot hang.
@@ -177,12 +177,18 @@ final class HeatmapViewport {
     func endDrag() { dragStart = nil }
 
     func pinch(to scale: Double, in timeline: QualityTimeline, geometry: ChartGeometry) {
-        if pinchStart == nil { pinchStart = (offset, zoom) }
+        // The anchor is captured when the gesture starts, not read from the
+        // current window: reading the live window each update makes the result
+        // depend on the path taken to get here, so pinching out to 0.5 and back
+        // does not return the window a direct 1.0 would give.
+        if pinchStart == nil {
+            let domain = displayDomain(in: timeline, geometry: geometry)
+            pinchStart = (offset, zoom, (domain.lowerBound + domain.upperBound) / 2)
+        }
         guard let start = pinchStart else { return }
-        let domain = displayDomain(in: timeline, geometry: geometry)
         zoom = start.zoom
         offset = start.offset
-        rescale(to: start.zoom * scale, keeping: (domain.lowerBound + domain.upperBound) / 2, in: timeline, geometry: geometry)
+        rescale(to: start.zoom * scale, keeping: start.center, in: timeline, geometry: geometry)
     }
 
     func endPinch() { pinchStart = nil }
@@ -254,5 +260,12 @@ struct ChartGeometry: Equatable {
         let span = domain.upperBound - domain.lowerBound
         guard span > 0 else { return data.midY }
         return data.maxY - CGFloat(max(-0.02, min(1.02, (score - domain.lowerBound) / span))) * data.height
+    }
+
+    /// Inverse of `y(for:domain:)`: the score at a pointer's vertical position.
+    func score(atY y: CGFloat, domain: ClosedRange<Double>) -> Double {
+        let span = domain.upperBound - domain.lowerBound
+        let fraction = Double((data.maxY - y) / max(1, data.height))
+        return domain.lowerBound + span * min(max(fraction, -0.05), 1.05)
     }
 }

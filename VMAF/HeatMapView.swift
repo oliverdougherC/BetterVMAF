@@ -105,6 +105,15 @@ struct HeatMapView: View {
         .padding(8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .controlBackgroundColor))
+        // A second comparison reuses this view's identity, so its @State
+        // viewport would otherwise inherit video A's zoom window and offset —
+        // video B could open scrolled to an arbitrary place, or zoomed into a
+        // range that means nothing for its duration. Vertical scale is a user
+        // preference and survives.
+        .onChange(of: timeline.analysisID) { _, _ in
+            viewport.reset()
+            scrollAccumulator = 0
+        }
         .onDisappear { viewport.cursorLocation = nil }
     }
 
@@ -112,19 +121,31 @@ struct HeatMapView: View {
 
     /// Derived from the cursor on every render, so no transform has to remember
     /// to clear it and a tooltip cannot describe a frame panned off screen.
+    ///
+    /// Selection starts from the summarized column under the cursor and lets the
+    /// cursor's vertical position pick the frame inside it: a column holding 49
+    /// frames at 98 and one at 70 draws a spike, and time-only selection would
+    /// name a 98-scoring frame while the pointer sits on the dip.
     private func hoverState(in plot: ChartGeometry, domain: ClosedRange<TimeInterval>, scoreDomain: ClosedRange<Double>) -> Hover? {
         guard interactive, let location = viewport.cursorLocation, plot.data.contains(location) else { return nil }
-        guard let index = timeline.nearestIndex(for: plot.time(atX: location.x, domain: domain)) else { return nil }
+        let time = plot.time(atX: location.x, domain: domain)
+        let columns = QualityTimeline.densityColumns(width: plot.dataWidth)
+        let index: Int
+        let bucket: QualityTimeline.Bucket?
+        if let column = timeline.bucket(coveringTime: time, columns: columns, domain: domain), column.frameCount > 1 {
+            bucket = column
+            index = timeline.nearestIndex(in: column, toScore: plot.score(atY: location.y, domain: scoreDomain))
+        } else {
+            guard let exact = timeline.nearestIndex(for: time) else { return nil }
+            index = exact
+            bucket = nil
+        }
         return Hover(
             index: index,
             x: plot.x(for: timeline.time(at: index), domain: domain),
             y: plot.y(for: timeline.score(at: index), domain: scoreDomain),
             run: timeline.bandRun(containing: index),
-            bucket: timeline.bucket(
-                coveringIndex: index,
-                columns: QualityTimeline.densityColumns(width: plot.dataWidth),
-                domain: domain
-            )
+            bucket: bucket
         )
     }
 
@@ -541,16 +562,12 @@ private struct HeatmapTooltip: View {
 
             if let run = hover.run, run.count > 1 {
                 Divider()
-                // The interval covers the hovered band *and worse* frames, so it
-                // is named by the worst band inside it, not the hovered frame's.
-                // Sized to one line of the tooltip's monospaced 10pt width: a
-                // wrapped row here overran the box height the placement math
-                // reserves and drew over its neighbour.
-                let runBand = QualityBand.allCases[timeline.bandIndices[run].min() ?? band.caseIndex]
-                Text("\(runBand.rawValue)-or-worse \(timeline.frameNumber(at: run.lowerBound))–\(timeline.frameNumber(at: run.upperBound)) · \(TimeFormat.duration(timeline.time(at: run.upperBound) - timeline.time(at: run.lowerBound)))")
-                    .foregroundStyle(runBand.tint)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                // The interval is defined by the *hovered* frame's threshold:
+                // it spans frames at that score band or worse. Naming it after
+                // the worst frame inside would claim, e.g., that a Fair stretch
+                // containing a single Poor frame is entirely Poor.
+                Text("\(band.rawValue)-or-worse: \(timeline.frameNumber(at: run.lowerBound))–\(timeline.frameNumber(at: run.upperBound)) · \(TimeFormat.duration(timeline.time(at: run.upperBound) - timeline.time(at: run.lowerBound)))")
+                    .foregroundStyle(band.tint)
             }
 
             if let bucket = hover.bucket, bucket.frameCount > 1 {
@@ -559,6 +576,11 @@ private struct HeatmapTooltip: View {
             }
         }
         .font(.system(size: 10, design: .monospaced))
+        // Every row is one line, which is what makes `tooltipOrigin`'s height
+        // bound real: with a fixed row count the tooltip cannot wrap its way
+        // past the box the placement math reserves and overdraw a neighbour.
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
         .multilineTextAlignment(.leading)
         .padding(7)
         .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 5))
