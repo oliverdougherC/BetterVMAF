@@ -576,13 +576,14 @@ private struct HeatmapTooltip: View {
             // The interval is defined by the *hovered* frame's threshold: it
             // spans frames at that score band or worse. Naming it after the
             // worst frame inside would claim, e.g., that a Fair stretch
-            // containing a single Poor frame is entirely Poor. Shown for a
-            // single frame too — the isolated bad frame is exactly what a
-            // reader is inspecting, not something to hide.
+            // containing a single Poor frame is entirely Poor. A single frame
+            // is labelled directly — its band *is* its band, there is no
+            // threshold-spanning interval to name — and stays short enough to
+            // fit the tooltip's width without ellipsis.
             if let run = hover.run {
                 Divider()
                 if run.count == 1 {
-                    Text("\(band.rawValue)-or-worse: isolated frame \(timeline.frameNumber(at: run.lowerBound)) · \(TimeFormat.duration(timeline.runSpan(run)))")
+                    Text("Isolated \(band.rawValue) frame \(timeline.frameNumber(at: run.lowerBound)) · \(TimeFormat.duration(timeline.runSpan(run)))")
                         .foregroundStyle(band.tint)
                 } else {
                     Text("\(band.rawValue)-or-worse: \(timeline.frameNumber(at: run.lowerBound))–\(timeline.frameNumber(at: run.upperBound)) · \(TimeFormat.duration(timeline.runSpan(run)))")
