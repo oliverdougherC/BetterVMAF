@@ -8,7 +8,7 @@ on:
       mode:
         description: Unsigned package or genuine production preflight (no tag/draft/feed)
         type: choice
-        options: [unsigned, production-preflight]
+        options: [unsigned, unsigned-intel, production-preflight]
         default: unsigned
 
 permissions:
@@ -77,11 +77,13 @@ jobs:
       !cancelled() && ((github.event_name == 'workflow_dispatch' && inputs.mode != 'production-preflight') ||
       needs.credentials.result == 'success')
     uses: ./.github/workflows/ci.yml
+    with:
+      intel_runner: ${{ inputs.mode == 'unsigned-intel' }}
 
   dry-run:
     if: ${{ !cancelled() && needs.ci.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.mode != 'production-preflight' }}
     needs: ci
-    runs-on: macos-15
+    runs-on: ${{ inputs.mode == 'unsigned-intel' && 'macos-15-intel' || 'macos-15' }}
     timeout-minutes: 25
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
@@ -166,11 +168,11 @@ jobs:
   staging:
     if: ${{ !cancelled() && needs.dry-run.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.mode != 'production-preflight' }}
     needs: dry-run
-    runs-on: macos-15
+    runs-on: ${{ inputs.mode == 'unsigned-intel' && 'macos-15-intel' || 'macos-15' }}
     timeout-minutes: 35
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
-      REQUIRE_BOTH_ENGINE_SLICES: '1'
+      REQUIRE_BOTH_ENGINE_SLICES: ${{ inputs.mode == 'unsigned-intel' && '0' || '1' }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -186,11 +188,11 @@ jobs:
   verify-staging-transfer:
     if: ${{ !cancelled() && needs.staging.result == 'success' }}
     needs: staging
-    runs-on: macos-15
+    runs-on: ${{ inputs.mode == 'unsigned-intel' && 'macos-15-intel' || 'macos-15' }}
     timeout-minutes: 15
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
-      REQUIRE_BOTH_ENGINE_SLICES: '1'
+      REQUIRE_BOTH_ENGINE_SLICES: ${{ inputs.mode == 'unsigned-intel' && '0' || '1' }}
       SPARKLE_FEED_URL: http://localhost:18742/appcast.xml
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

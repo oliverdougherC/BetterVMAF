@@ -6,6 +6,11 @@ on:
     branches: [main]
   workflow_dispatch:
   workflow_call:
+    inputs:
+      intel_runner:
+        description: Supplemental native Intel validation on the standard public runner
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -17,7 +22,7 @@ concurrency:
 jobs:
   build-and-test:
     name: Build and test (macOS 15, Xcode 16.4)
-    runs-on: macos-15
+    runs-on: ${{ inputs.intel_runner && 'macos-15-intel' || 'macos-15' }}
     timeout-minutes: 30
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
