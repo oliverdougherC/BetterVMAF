@@ -7,12 +7,12 @@ BetterVMAF currently calculates **VMAF v0.6.1** with bundled FFmpeg and displays
 ## Available today
 
 - SwiftUI interface for one comparison or a queue of encodes against one reference.
-- VMAF mean, minimum, maximum, harmonic mean, and frame-level graphs.
+- VMAF mean, minimum, maximum, harmonic mean, and a per-frame quality heat map.
 - Bundled legacy 1080p and 4K VMAF models with automatic selection.
 - CSV, JSON, and PDF export.
 - Progress and diagnostic output from FFmpeg.
 
-The current “heat map” is a colored score chart over time, not a spatial map of pixel damage. Multi-metric analysis and synchronized source/encode playback are planned capabilities.
+The heat map plots per-frame VMAF score over time: colour is the score, and shading density or a min–max envelope carries the frames as the clip grows longer. It is a temporal quality view, not a spatial map of pixel damage. Multi-metric analysis and synchronized source/encode playback are planned capabilities.
 
 ## Install
 

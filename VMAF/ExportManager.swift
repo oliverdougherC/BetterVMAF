@@ -28,7 +28,7 @@ class ExportManager {
     struct ExportOptions {
         var includeFrameData: Bool = true
         var includeAggregateMetrics: Bool = true
-        var includeGraphs: Bool = true
+        var includeVisualization: Bool = true
         var templateName: String = "default"
     }
     
@@ -176,7 +176,7 @@ class ExportManager {
         return PDFGenerator.generateReport(
             result: result,
             videoInfo: videoInfo,
-            includeGraphs: options.includeGraphs,
+            includeVisualization: options.includeVisualization,
             includeFrameData: options.includeFrameData
         )
     }
