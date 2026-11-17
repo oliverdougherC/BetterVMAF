@@ -7,7 +7,7 @@ final class ComparisonActivity: ObservableObject {
 
     @Published var isRestarting = false
     @Published private(set) var isQuitting = false
-    private var comparisons = [UUID: ComparisonRun]()
+    @Published private var comparisons = [UUID: ComparisonRun]()
 
     var isActive: Bool { !comparisons.isEmpty }
     var canStart: Bool { !isRestarting && !isQuitting }
@@ -32,9 +32,10 @@ final class ComparisonActivity: ObservableObject {
 }
 
 @MainActor
-final class AppUpdates: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
+final class AppUpdates: NSObject, ObservableObject, NSApplicationDelegate, SPUUpdaterDelegate {
     private let activity: ComparisonActivity
     private var confirmingQuit = false
+    @Published private(set) var deferredInstallation: (() -> Void)?
     private(set) lazy var controller: SPUStandardUpdaterController? = {
         let info = Bundle.main.infoDictionary
         guard let feed = info?["SUFeedURL"] as? String,
@@ -61,34 +62,46 @@ final class AppUpdates: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
         _ = controller
     }
 
-    func updaterShouldRelaunchApplication(_ updater: SPUUpdater) -> Bool {
-        allowUpdateRelaunch {
+    func updater(
+        _ updater: SPUUpdater, shouldPostponeRelaunchForUpdate item: SUAppcastItem,
+        untilInvokingBlock install: @escaping () -> Void
+    ) -> Bool {
+        guard postponeInstallationIfNeeded(install) else { return false }
+
+        // Sparkle's Ready to Install button has already used its reply. Close
+        // that window and let our menu resume this same installation.
+        controller?.userDriver.dismissUpdateInstallation()
+        Task { @MainActor in
+            guard deferredInstallation != nil, !confirmingQuit, !activity.isQuitting else { return }
             let alert = NSAlert()
             alert.messageText = "Comparison in progress"
-            alert.informativeText = "Check for updates again when you’re ready to close your comparison results."
+            alert.informativeText = "Choose Install Downloaded Update from the Better VMAF menu when you’re ready to close your comparison results."
             alert.runModal()
         }
+        return true
     }
 
-    func allowUpdateRelaunch(onBusy: @escaping @MainActor () -> Void) -> Bool {
-        guard !activity.isQuitting else { return false }
-        guard activity.isActive else { return true }
-
-        // Sparkle aborts the relaunch attempt. Deferring it until the last
-        // worker finishes could close the app before the user sees the result.
-        Task { @MainActor in
-            if !activity.isQuitting { onBusy() }
-        }
-        return false
+    func postponeInstallationIfNeeded(_ install: @escaping () -> Void) -> Bool {
+        guard activity.isActive || confirmingQuit || activity.isQuitting else { return false }
+        deferredInstallation = install
+        return true
     }
 
-    func updaterWillRelaunchApplication(_ updater: SPUUpdater) {
-        // Close the gap between Sparkle's relaunch decision and its quit event.
+    func installDownloadedUpdate() {
+        guard !activity.isActive, activity.canStart, !confirmingQuit,
+              let install = deferredInstallation else { return }
+        deferredInstallation = nil
+        install()
+    }
+
+    func updater(_ updater: SPUUpdater, willInstallUpdate item: SUAppcastItem) {
+        // Sparkle calls this before requesting termination. Keep new work
+        // blocked through the quit event and any Sparkle termination retries.
         activity.isRestarting = true
     }
 
     func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: Error?) {
-        // Sparkle may recover from a failed or cancelled restart in this process.
+        deferredInstallation = nil
         activity.isRestarting = false
     }
 
@@ -108,7 +121,11 @@ final class AppUpdates: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
         confirm: () -> Bool, reply: @escaping @MainActor (Bool) -> Void
     ) -> NSApplication.TerminateReply {
         guard !confirmingQuit, !activity.isQuitting else { return .terminateCancel }
-        guard activity.isActive else { return .terminateNow }
+        guard activity.isActive else {
+            _ = activity.stopForQuit()
+            return .terminateNow
+        }
+        guard !activity.isRestarting else { return .terminateCancel }
 
         confirmingQuit = true
         let shouldQuit = confirm()
@@ -125,12 +142,21 @@ final class AppUpdates: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
 }
 
 struct CheckForUpdates: View {
+    @ObservedObject var updates: AppUpdates
+    @ObservedObject private var activity = ComparisonActivity.shared
     let updater: SPUUpdater
     @State private var canCheck = false
 
     var body: some View {
-        Button("Check for Updates…", action: updater.checkForUpdates)
-            .disabled(!canCheck)
-            .onReceive(updater.publisher(for: \.canCheckForUpdates)) { canCheck = $0 }
+        Group {
+            if updates.deferredInstallation != nil {
+                Button("Install Downloaded Update", action: updates.installDownloadedUpdate)
+                    .disabled(activity.isActive || !activity.canStart)
+            } else {
+                Button("Check for Updates…", action: updater.checkForUpdates)
+                    .disabled(!canCheck)
+            }
+        }
+        .onReceive(updater.publisher(for: \.canCheckForUpdates)) { canCheck = $0 }
     }
 }

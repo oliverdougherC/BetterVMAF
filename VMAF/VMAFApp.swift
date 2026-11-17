@@ -19,7 +19,7 @@ struct VMAFApp: App {
         .commands {
             CommandGroup(after: .appInfo) {
                 if let updater = updates.controller?.updater {
-                    CheckForUpdates(updater: updater)
+                    CheckForUpdates(updates: updates, updater: updater)
                 }
             }
         }

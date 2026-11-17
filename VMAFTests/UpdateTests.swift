@@ -3,22 +3,48 @@ import Testing
 @testable import VMAF
 
 struct UpdateTests {
-    @MainActor @Test func updateRelaunchWaitsForBothSingleAndBatchWork() throws {
+    @MainActor @Test func deferredUpdateRequiresExplicitRetryAfterAllWorkEnds() throws {
         let activity = ComparisonActivity()
         let updates = AppUpdates(activity: activity)
         let single = try #require(activity.begin())
         let batch = try #require(activity.begin())
 
-        #expect(!updates.allowUpdateRelaunch(onBusy: {}))
+        var installCount = 0
+        #expect(updates.postponeInstallationIfNeeded { installCount += 1 })
+        updates.installDownloadedUpdate()
         activity.end(single)
-        #expect(!updates.allowUpdateRelaunch(onBusy: {}))
+        updates.installDownloadedUpdate()
+        #expect(installCount == 0)
         activity.end(batch)
-        #expect(updates.allowUpdateRelaunch(onBusy: { Issue.record("An idle app can relaunch") }))
+        #expect(installCount == 0)
+        updates.installDownloadedUpdate()
+        updates.installDownloadedUpdate()
+        #expect(installCount == 1)
+        #expect(!updates.postponeInstallationIfNeeded {
+            Issue.record("An idle app lets Sparkle continue directly")
+        })
 
         activity.isRestarting = true
         #expect(activity.begin() == nil)
         activity.isRestarting = false
         #expect(activity.begin() != nil)
+    }
+
+    @MainActor @Test func quitConfirmationCanOverlapUpdatePreparation() throws {
+        let activity = ComparisonActivity()
+        let updates = AppUpdates(activity: activity)
+        let run = try #require(activity.begin())
+
+        let response = updates.requestTermination(confirm: {
+            activity.end(run)
+            #expect(updates.postponeInstallationIfNeeded {})
+            return false
+        }, reply: { _ in })
+        #expect(response == .terminateCancel)
+        #expect(updates.deferredInstallation != nil)
+
+        #expect(updates.requestTermination(confirm: { false }, reply: { _ in }) == .terminateNow)
+        #expect(activity.begin() == nil)
     }
 
     @MainActor @Test func decliningQuitPreservesActiveWork() throws {
@@ -44,6 +70,9 @@ struct UpdateTests {
         let updates = AppUpdates(activity: activity)
         let running = try #require(activity.begin())
         let validating = try #require(activity.begin())
+        #expect(updates.postponeInstallationIfNeeded {
+            Issue.record("Intentional quit must leave Sparkle to install without relaunching")
+        })
         let child = Process()
         child.executableURL = URL(fileURLWithPath: "/bin/sleep")
         child.arguments = ["30"]
@@ -64,6 +93,7 @@ struct UpdateTests {
         #expect(!child.isRunning)
         #expect(child.terminationReason == .uncaughtSignal)
         #expect(running.isCancelled && validating.isCancelled)
+        updates.installDownloadedUpdate()
         #expect(activity.begin() == nil)
         #expect(throws: CancellationError.self) { try validating.start(Process()) }
     }
