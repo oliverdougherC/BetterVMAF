@@ -425,7 +425,7 @@ struct QualityTimeline {
     }
 
     /// The column a timestamp belongs to, and the effective column count for a
-    /// requested width. Shared by `buckets` and `bucket(coveringIndex:)` so the
+    /// requested width. Shared by `buckets` and `bucket(coveringTime:)` so the
     /// tooltip and the drawing can never disagree about bucket membership.
     private func columnLayout(for time: TimeInterval, columns requested: Int, domain: ClosedRange<TimeInterval>)
         -> (columnCount: Int, column: Int)? {
@@ -437,13 +437,7 @@ struct QualityTimeline {
         return (columnCount, column)
     }
 
-    /// The bucket covering `index` at a given detail level, for the tooltip.
-    func bucket(coveringIndex index: Int, columns: Int, domain: ClosedRange<TimeInterval>) -> Bucket? {
-        guard metrics.indices.contains(index) else { return nil }
-        return bucket(coveringTime: metrics[index].timestamp, columns: columns, domain: domain)
-    }
-
-    /// The bucket a timestamp falls into, without going through a frame index.
+    /// The bucket a timestamp falls into.
     func bucket(coveringTime time: TimeInterval, columns: Int, domain: ClosedRange<TimeInterval>) -> Bucket? {
         guard let layout = columnLayout(for: time, columns: columns, domain: domain) else { return nil }
         let built = buckets(count: layout.columnCount, covering: domain)
