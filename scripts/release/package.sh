@@ -1,5 +1,7 @@
 #!/bin/bash
 set -euo pipefail
+# Remove credentials from child environments before invoking any tools.
+source "$(dirname -- "${BASH_SOURCE[0]}")/check-signing-inputs.sh"
 mode="${1:?Specify dry-run, staging, or production}"
 destination="${2:?Specify a new output directory}"
 if [[ "$destination" != /* ]]; then destination="$PWD/$destination"; fi
@@ -27,14 +29,7 @@ case "$mode" in
         export SPARKLE_FEED_URL
         SPARKLE_FEED_URL=$("${release[@]}" stable-feed)
         archive_url=stable
-        for name in APPLE_TEAM_ID APPLE_CERTIFICATE_P12 APPLE_CERTIFICATE_PASSWORD \
-            APPLE_NOTARY_KEY APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER_ID; do
-            if [[ -z "${!name:-}" ]]; then echo "Missing production signing setting: $name" >&2; exit 1; fi
-            # Keep signing material out of environments inherited by build tools.
-            export -n "$name"
-        done
-        export APPLE_TEAM_ID
-        [[ "$APPLE_TEAM_ID" =~ ^[A-Z0-9]{10}$ ]] || { echo "Invalid Apple Team ID" >&2; exit 1; }
+        check_signing_inputs
         ;;
     *) echo "Invalid package mode: $mode" >&2; exit 2 ;;
 esac
@@ -47,7 +42,12 @@ fi
 umask 077
 work=$(mktemp -d)
 keychain="$work/signing.keychain-db"
+original_keychains=()
+while IFS= read -r line; do
+    original_keychains+=("$(printf '%s' "$line" | sed 's/^ *"//; s/"$//')")
+done < <(security list-keychains -d user)
 cleanup() {
+    if [[ -e "$keychain" ]]; then security list-keychains -d user -s "${original_keychains[@]}" || true; fi
     if [[ -e "$keychain" ]]; then security delete-keychain "$keychain" || true; fi
     rm -rf -- "$work"
 }
@@ -59,6 +59,20 @@ output="$work/output"
 staging="$work/staging"
 mkdir "$output" "$staging"
 dmg="$output/$("${release[@]}" asset-name "$version")"
+
+if [[ "$mode" != dry-run ]]; then
+    if [[ "$mode" == staging && -n "${SPARKLE_TOOLS_DIR:-}" ]]; then
+        tools="$SPARKLE_TOOLS_DIR"
+    else
+        scripts/release/sparkle-tools.sh "$work/sparkle"
+        tools="$work/sparkle/bin"
+    fi
+    # A mismatched identity must fail before any signing or notarization.
+    printf 'BetterVMAF signing identity check\n' > "$work/challenge"
+    signature=$(printf '%s\n' "$SPARKLE_PRIVATE_KEY" | "$tools/sign_update" --ed-key-file - -p "$work/challenge")
+    "${release[@]}" verify-signature "$work/challenge" "$signature"
+fi
+
 
 xcodebuild -project VMAF.xcodeproj -scheme VMAF -configuration Release \
     -destination 'generic/platform=macOS' \
@@ -74,12 +88,14 @@ ditto "$work/build/Better VMAF.app" "$app"
 ln -s /Applications "$staging/Applications"
 minimum_os=$("${release[@]}" check-bundle "$app" "$version" "$mode")
 
+
 if [[ "$mode" == production ]]; then
     printf '%s' "$APPLE_CERTIFICATE_P12" | base64 -D > "$work/certificate.p12"
     printf '%s' "$APPLE_NOTARY_KEY" | base64 -D > "$work/AuthKey.p8"
     password=$(openssl rand -hex 32)
     security create-keychain -p "$password" "$keychain"
     security unlock-keychain -p "$password" "$keychain"
+    security list-keychains -d user -s "$keychain" "${original_keychains[@]}"
     security set-keychain-settings -lut 7200 "$keychain"
     security import "$work/certificate.p12" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
     rm -- "$work/certificate.p12"
@@ -137,12 +153,6 @@ if [[ "$mode" == production ]]; then
     xcrun stapler staple "$dmg"
 fi
 if [[ "$mode" != dry-run ]]; then
-    if [[ "$mode" == staging && -n "${SPARKLE_TOOLS_DIR:-}" ]]; then
-        tools="$SPARKLE_TOOLS_DIR"
-    else
-        scripts/release/sparkle-tools.sh "$work/sparkle"
-        tools="$work/sparkle/bin"
-    fi
     signature=$(printf '%s\n' "$SPARKLE_PRIVATE_KEY" | "$tools/sign_update" --ed-key-file - -p "$dmg")
     "${release[@]}" render-feed "$output/appcast.xml" "$dmg" "$version" "$archive_url" "$minimum_os" "$signature"
     printf '%s\n' "$SPARKLE_PRIVATE_KEY" |

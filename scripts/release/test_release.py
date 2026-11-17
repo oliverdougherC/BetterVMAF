@@ -1,4 +1,5 @@
 import base64
+import os
 from pathlib import Path
 import plistlib
 import subprocess
@@ -171,6 +172,33 @@ class AppcastTests(unittest.TestCase):
         before = release.checksum(self.dmg)
         self.dmg.write_bytes(b"bad archive!")
         self.assertNotEqual(before, release.checksum(self.dmg))
+
+
+class SigningInputTests(unittest.TestCase):
+    def test_missing_credentials_fail_before_build_and_leave_no_package(self):
+        names = ['SPARKLE_PUBLIC_KEY', 'SPARKLE_PRIVATE_KEY', 'APPLE_TEAM_ID',
+                 'APPLE_CERTIFICATE_P12', 'APPLE_CERTIFICATE_PASSWORD', 'APPLE_NOTARY_KEY',
+                 'APPLE_NOTARY_KEY_ID', 'APPLE_NOTARY_ISSUER_ID']
+        environment = {k: v for k, v in os.environ.items() if k not in names}
+        with TemporaryDirectory() as scratch:
+            destination = Path(scratch) / 'package'
+            result = subprocess.run(['bash', str(release.ROOT / 'scripts/release/package.sh'),
+                                     'production', str(destination), f'v{release.project_version()}'],
+                                    env=environment, text=True, capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            for name in names:
+                self.assertIn(f'Missing production signing setting: {name}', result.stderr)
+            self.assertNotIn('xcodebuild', result.stdout)
+            self.assertFalse(destination.exists())
+
+    def test_credentials_are_removed_from_child_environments(self):
+        environment = os.environ | {'SPARKLE_PRIVATE_KEY': 'private-test-sentinel',
+                                    'APPLE_CERTIFICATE_PASSWORD': 'password-test-sentinel'}
+        script = 'source scripts/release/check-signing-inputs.sh; /usr/bin/env'
+        result = subprocess.run(['bash', '-c', script], cwd=release.ROOT, env=environment,
+                                text=True, capture_output=True, check=True)
+        self.assertNotIn('private-test-sentinel', result.stdout)
+        self.assertNotIn('password-test-sentinel', result.stdout)
 
 
 if __name__ == "__main__":

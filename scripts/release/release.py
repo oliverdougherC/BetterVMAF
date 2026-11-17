@@ -219,7 +219,7 @@ def main():
     parser.add_argument("command", choices=[
         "version", "build-number", "asset-name", "stable-feed", "staging-archive",
         "select-published", "check-new-tag", "check-bundle", "write-entitlements", "check-entitlements", "render-feed", "verify-feed",
-        "checksum", "verify-checksum",
+        "checksum", "verify-checksum", "verify-signature",
     ])
     parser.add_argument("args", nargs="*")
     parsed = parser.parse_args()
@@ -269,6 +269,8 @@ def main():
             Path(path).write_bytes(appcast(version, minimum_os, archive_url, dmg.stat().st_size, signature))
         else:
             print(verify_appcast(Path(path), dmg, version, archive_url, os.environ["SPARKLE_PUBLIC_KEY"]))
+    elif command == "verify-signature":
+        verify_signature(os.environ["SPARKLE_PUBLIC_KEY"], Path(args[0]), args[1])
     elif command == "checksum":
         print(checksum(Path(args[0])), end="")
     else:

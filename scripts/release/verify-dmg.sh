@@ -41,6 +41,7 @@ if [[ "$mode" == production ]]; then
     requirement="anchor apple generic and certificate leaf[subject.OU] = \"$team\" and certificate leaf[field.1.2.840.113635.100.6.1.13] exists"
     codesign --verify --strict -R "$requirement" "$dmg"
     xcrun stapler validate "$dmg"
+    spctl --assess --type open --context context:primary-signature --verbose "$dmg"
 fi
 
 hdiutil verify "$dmg" >&2
@@ -57,6 +58,20 @@ if [[ "$mode" != dry-run ]]; then
 fi
 if [[ "$mode" == production ]]; then
     codesign --verify --strict -R "$requirement" "$app"
+    # Deep verification checks integrity, but not each component's team/runtime.
+    sparkle="$app/Contents/Frameworks/Sparkle.framework/Versions/Current"
+    for component in "$app" "$app/Contents/Frameworks/Sparkle.framework" \
+        "$sparkle/Autoupdate" "$sparkle/Updater.app" \
+        "$sparkle/XPCServices/Installer.xpc" "$sparkle/XPCServices/Downloader.xpc"; do
+        codesign --verify --strict -R "$requirement" "$component"
+        info=$(codesign -dvv "$component" 2>&1)
+        [[ "$info" == *'runtime)'* && "$info" == *'Timestamp='* ]] ||
+            { echo "Missing hardened runtime or secure timestamp: $component" >&2; exit 1; }
+        entitlements=$(codesign --display --xml --entitlements - "$component" 2>/dev/null)
+        if [[ -n "$entitlements" ]]; then
+            printf '%s' "$entitlements" | python3 -c 'import plistlib,sys; e=plistlib.load(sys.stdin.buffer); assert not e.get("com.apple.security.get-task-allow"), "Debug entitlement in production component"'
+        fi
+    done
     xcrun stapler validate "$app"
     spctl --assess --type execute --verbose "$app"
 fi
