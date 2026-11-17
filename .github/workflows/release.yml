@@ -25,6 +25,15 @@ jobs:
     timeout-minutes: 2
     steps:
       - run: |
+          echo '::error::Production preflight must run from reviewed main. No signing or publication was attempted.'
+          exit 1
+
+  dispatch-policy:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'production-preflight' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - run: |
           echo 'Production preflight must run from reviewed main; no signing credentials were accessed.' >&2
           exit 1
 

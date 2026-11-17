@@ -74,6 +74,10 @@ def audit():
         for name in SECRETS:
             check(name, name in names, 'release-signing environment secret; presence only, not credential validity')
     inspect('Credential metadata access', credentials)
+    # Names present in GitHub cannot prove possession of a recoverable stable key,
+    # acceptance by Apple, or completion of the bundled engines' distribution record.
+    check('FFmpeg corresponding-source distribution', False,
+          'Open prerequisite: pin and host exact linked-library sources, patches and build inputs; see docs/ENGINE_PROVENANCE.md')
     return checks
 
 

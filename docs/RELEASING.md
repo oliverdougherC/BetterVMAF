@@ -1,5 +1,10 @@
 # Releasing BetterVMAF
 
+Start with the [current readiness audit](RELEASE_READINESS.md) and the concise
+[production activation checklist](PRODUCTION_ACTIVATION.md). Run
+`python3 scripts/release/readiness.py` for a read-only check of live GitHub settings
+and missing credential names. A configuration check does not validate Apple credentials.
+
 The package workflow runs shared macOS CI, creates a universal DMG, and verifies the app mounted from the final image. Production builds sign the app and Sparkle components with Developer ID, preserve the pinned FFmpeg signatures, and notarize and staple the app and image. Sparkle signs the finished DMG and appcast with EdDSA. The workflow opens a GitHub draft only after these checks pass.
 
 A maintainer publishes the draft in GitHub. The publication event validates the highest published stable version, then deploys its signed appcast to [GitHub Pages](https://oliverdougherc.github.io/BetterVMAF/appcast.xml). The authenticated Pages deployment serves only the feed. Its DMG stays in GitHub Releases. The manual **Deploy stable appcast** workflow on `main` reruns the same checks, including when publishing through automation that uses `GITHUB_TOKEN`. GitHub suppresses the release event for that token. [GitHub workflow events](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
@@ -13,7 +18,7 @@ A maintainer publishes the draft in GitHub. The publication event validates the 
    git tag -a v1.4.0 origin/main -m 'Better VMAF 1.4.0'
    git push origin refs/tags/v1.4.0
    ```
-3. Approve **release-signing** in Actions. Verify the draft contains `Better-VMAF-1.4.0.dmg`, its `.sha256` file, and `appcast.xml`. Review the release notes and FFmpeg distribution notices and corresponding source. Test the signed DMG on clean Macs before publication. Publish the complete draft as a stable release when ready.
+3. Inspect the **release-signing** run in Actions. Verify the draft contains `Better-VMAF-1.4.0.dmg`, its `.sha256` file, and `appcast.xml`. Review the release notes and FFmpeg distribution notices and corresponding source. Test the signed DMG on clean Macs before publication. Publish the complete draft as a stable release when ready.
 4. Confirm the **Deploy stable appcast** run passed and the Pages URL serves the signed feed. In an older Sparkle-enabled install, choose **Better VMAF → Check for Updates…**.
 
 The existing `1.4` draft predates this pipeline. Leave it alone unless explicitly authorized. If it is later published, choose a higher version for the first Sparkle-enabled release. Users of older builds install the first Sparkle-enabled version manually from GitHub Releases, then use the app menu or opt into automatic checks at Sparkle’s prompt. Sparkle uses its native download, verification, and installation UI. Checks and downloads can run during comparisons. If a user tries to install and relaunch during a single comparison or batch, Better VMAF defers the restart. Once all comparisons have ended, **Install Downloaded Update** in the app menu resumes the pending installation and relaunches the app. Command-Q during a comparison offers to keep working or stop the FFmpeg workers and quit. A prepared update can install on intentional quit without relaunching the app.
@@ -24,26 +29,80 @@ Every production Sparkle release must support macOS 15.2 while the stable feed l
 
 Before raising the macOS minimum, update the pipeline to keep the newest verified immutable release for each supported macOS range in a single EdDSA-signed feed. Verify each retained archive and its declared system requirement, sign the complete feed with the stable key, and test Sparkle’s selection on both sides of the new minimum. [Sparkle minimum system versions](https://sparkle-project.org/documentation/publishing/#minimum-system-version-requirements)
 
-## One-time GitHub setup
+## GitHub configuration
 
-- Enable **Release immutability** in repository settings. Restrict creation and changes of `v*` tags to release maintainers using a tag ruleset and keep `main` protected. The workflows require the tag commit to be on `main`.
-- Create a **release-signing** environment that permits protected `v*` release tags. Set required reviewers according to the maintainer team’s approval process. Put the signing secrets in this environment.
-- In **Settings → Pages**, select **GitHub Actions** as the source. Set up the **github-pages** environment for release tags and manual reconciliation from `main`. Preserve the existing Pages URL if the repository or owner is renamed. This Pages deployment owns the entire project site. [GitHub Pages workflow setup](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)
-- Add repository Actions variables `SPARKLE_PUBLIC_KEY` and `APPLE_TEAM_ID`. The verification job uses both public values to check the published bundle and assets.
+Configured on 2026-11-17, and inspected by `scripts/release/readiness.py`:
 
-### Sparkle signing
+- Pages source is **GitHub Actions**, HTTPS enabled. Enabling the site does not publish
+  `appcast.xml`. The isolated smoke workflow uses only `/staging/release-readiness/`.
+- Release immutability is enabled for future publications. Historical releases and the
+  existing `1.4` draft were not modified.
+- Existing `main` protection retains the strict macOS CI check and blocks force pushes
+  and deletion. Its existing admin bypass policy is preserved.
+- Two active `v*` rulesets restrict creation to repository admins and forbid updates or
+  deletion with no bypass on the latter rule. Test these by inspecting effective rules;
+  do not create a throwaway production tag.
+- **release-signing** and **github-pages** allow only branch `main` and tags `v*`.
+  No reviewer or wait timer is required for this single-maintainer repository; publishing
+  the completed draft remains the manual release gate. Feature branches cannot access
+  these environments. Fork PR workflows receive no release secrets.
+- Actions has read-only default token permissions and cannot approve PR reviews. Only
+  the draft job requests `contents: write`; only Pages deployment jobs request
+  `pages: write` and `id-token: write`. Artifact jobs have read-only source access.
 
-The project pins Sparkle 2.10.1 and bundles its license in the app. Download the matching, checksum-pinned Sparkle tools with `scripts/release/sparkle-tools.sh /path/to/new-tools-directory`. Create a dedicated keychain entry on a trusted Mac. Keep the exported key outside the repository with owner-only permissions.
+Put public `SPARKLE_PUBLIC_KEY` and `APPLE_TEAM_ID` in repository Actions variables.
+Put private signing material only in **release-signing** environment secrets.
+
+### Trusted Mac Sparkle setup
+
+This does **not** require Apple membership. The stable identity is not yet created or
+provisioned: the maintainer must choose offline storage and a passphrase. Do not generate
+it in Actions. The helper uses Sparkle 2.10.1's checksum-pinned official `generate_keys`,
+keeps the permanent identity in your login Keychain, and exports only into a private
+short-lived directory removed at exit. Existing accounts are reused rather than rotated.
+
+On the trusted Mac with `gh` authenticated to this repository, mount your offline backup
+volume. Store a strong passphrase separately in your password manager, then run:
 
 ```bash
-umask 077
-/path/to/tools/bin/generate_keys --account bettervmaf-stable
-/path/to/tools/bin/generate_keys --account bettervmaf-stable -p
-/path/to/tools/bin/generate_keys --account bettervmaf-stable -x /private/path/bettervmaf-stable.key
-gh secret set SPARKLE_PRIVATE_KEY --env release-signing < /private/path/bettervmaf-stable.key
+scripts/release/sparkle-identity.sh prepare bettervmaf-stable /Volumes/OFFLINE/BetterVMAF-stable.enc
+scripts/release/sparkle-identity.sh recover-test /Volumes/OFFLINE/BetterVMAF-stable.enc /Volumes/OFFLINE/BetterVMAF-stable.enc.public
+scripts/release/sparkle-identity.sh provision /Volumes/OFFLINE/BetterVMAF-stable.enc
+python3 scripts/release/readiness.py
 ```
 
-Put the printed public key in `SPARKLE_PUBLIC_KEY`. Keep an encrypted offline backup and test recovery with `generate_keys --account <account> -f <private-key-file>` on a trusted Mac. Keep the stable private key out of staging. Preserve both signing identities across normal releases. If you need to rotate them, follow Sparkle’s rotation procedure and validate it on an install that trusts the original identity. If the signing key is lost and the existing installed apps can no longer verify a feed, distribute a manually installed replacement. [Sparkle signing and recovery](https://sparkle-project.org/documentation/#3-segue-for-security-concerns)
+Replace the volume/path before running. OpenSSL prompts directly for the passphrase;
+never put it in a command, environment variable, chat or log. The helper encrypts with
+AES-256-CBC and salted PBKDF2 (600,000 iterations), decrypts and compares the backup,
+then signs a real challenge from the recovered key and verifies it with CryptoKit.
+It also proves a modified challenge is rejected. The public key is saved beside the
+backup; record its fingerprint separately in your password manager:
+`shasum -a 256 /Volumes/OFFLINE/BetterVMAF-stable.enc.public`.
+Keep a second encrypted copy on separate offline media and test it with `recover-test`.
+Unmount both backup volumes after testing. Never commit an exported key or encrypted
+backup. The helper rejects backup paths inside the repository.
+
+`provision` verifies the recovered key against the stable Keychain public key before
+uploading `SPARKLE_PRIVATE_KEY` directly to **release-signing**, then setting the repository
+`SPARKLE_PUBLIC_KEY`. The private key is never printed or passed as a command argument.
+A secret-presence audit cannot verify its value; production packaging repeats the actual
+public/private signature check before building.
+
+For disaster recovery on a trusted replacement Mac: verify the separately recorded
+public fingerprint, run `recover-test`, decrypt into an owner-only temporary directory
+(`umask 077; work=$(mktemp -d)`), and import using the pinned tool's
+`generate_keys --account bettervmaf-stable -f "$work/private.key"`. Use the same OpenSSL
+parameters as the helper to decrypt. Compare `generate_keys --account bettervmaf-stable -p`
+with the saved public key, run `provision`, and remove the temporary directory. Never
+replace an existing stable account merely to silence an import error. Loss or rotation
+requires [Sparkle's documented key-rotation procedure](https://sparkle-project.org/documentation/#rotating-signing-keys)
+and an installed-copy acceptance test. Key loss with required signed feeds may require
+a manually installed replacement; do not assume an automatic recovery path.
+
+The helper was tested using a disposable staging account, encrypted backup, separate
+recovery, signatures and corruption rejection. No stable private key was generated for
+that test. Keep staging keys, bundle IDs and localhost feeds separate from production.
+[Official Sparkle key-generation guidance](https://sparkle-project.org/documentation/#3-segue-for-security-concerns).
 
 ### Developer ID and notarization
 
@@ -61,7 +120,31 @@ Use `base64 -i /private/path/file | gh secret set <NAME> --env release-signing` 
 
 ## Local packaging and staging
 
-Run `./create_dmg.sh` for the versioned unsigned DMG and checksum under `build/packages/<version>/`. Pass a new output directory to build another copy. The **Package a release** workflow’s manual run builds the same unsigned package as a downloadable Actions artifact. These builds have no update feed or key.
+Run `./create_dmg.sh` for the versioned unsigned DMG and checksum under `build/packages/<version>/`. Pass a new output directory to build another copy. The **Package a release** workflow's manual `unsigned` mode builds the same unsigned
+package as a downloadable `unsigned-dry-run` Actions artifact. That app has no update
+feed or key. It then creates a separate two-version ad-hoc staging pair with a disposable
+identity, signs and verifies both feeds and archives, rejects real corruptions, uploads
+`staging-integration`, and verifies the downloaded artifacts in an independent job.
+The ephemeral identity is staging-only and removed at exit.
+
+```bash
+gh workflow run release.yml --ref main -f mode=unsigned
+```
+
+For a local repeat, run `scripts/release/staging-smoke.sh build/new-staging-directory`.
+The public key is saved in that directory; private exports are excluded from outputs.
+For a genuine Apple preflight, select `production-preflight` on reviewed `main`. It checks
+credentials before CI and produces `signed-release` without a tag, draft, publication or
+feed deployment. See the activation checklist for clean-Mac acceptance.
+
+The **Exercise isolated Pages deployment** workflow accepts a successful unsigned
+package run ID. It verifies the transferred staging DMG and publishes only the signed
+staging appcast/public key under `/staging/release-readiness/`, with localhost archive URLs.
+This is a transport/permissions test, not a remotely installable update channel. It uses
+a separate `github-pages-staging` environment, serializes with production deployments,
+requires the production URL to be 404 and refuses any published production Sparkle release.
+After first production publication it must stay disabled. It does not publish the root
+`appcast.xml`, deploy a DMG, or read stable signing secrets.
 
 For an end-to-end run on a Mac, create a second Sparkle key with `generate_keys --account bettervmaf-staging`, then export it to a private temporary directory as above. Build two versions with the same localhost feed and staging key.
 

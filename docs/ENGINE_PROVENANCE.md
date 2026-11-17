@@ -98,3 +98,33 @@ chmod 755 VMAF/Resources/ffmpeg VMAF/Resources/ffmpeg.x86_64
 
 The server rotates "latest release" build directories; pin the two directory names above rather
 than following `/redirect/latest/...` for a reproducible re-download.
+
+## Release-readiness source audit (2026-11-17)
+
+The upstream build manifests remain available for the pinned [arm64 build](https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/versions.txt) and [Intel build](https://ffmpeg.martin-riedl.de/download/macos/amd64/1789931006_9.0.2/versions.txt).
+The flags summarized above are a subset: these helpers also statically link OpenSSL,
+libass, fontconfig, freetype, harfbuzz, libbluray, snappy, SRT, libklvanc, zvbi,
+OpenH264, OpenJPEG, rav1e, SVT-AV1, vpx, vvenc and audio codec libraries. The prefixes
+and clang patch versions differ between architectures. Both upstream manifests name
+libvmaf 3.2.0. `ffmpeg -buildconf` records the actual flags without modifying a helper.
+
+The upstream [build-script repository](https://git.martin-riedl.de/ffmpeg/build-script)
+is public, but its latest visible commit during this audit is
+`f63b8aab8f5ce1a067da86ba69e34a36a7e217e5` (2026-08-17, FFmpeg 9.0.1).
+The manifests describe x264 only as `0.165.x`. Neither a public build script nor those
+version labels establish the exact source revisions, patches, configuration inputs,
+and complete linked-library notices for these September 20 prebuilt binaries.
+
+**Still open before production distribution:** obtain and pin the full corresponding
+source and build inputs for these exact helpers, arrange durable source delivery with
+the release, and complete notices for all linked components. An alternative is a
+separate, reviewed engine-build project with fully pinned source inputs and parity
+validation. Do not silently rebuild or substitute these signed, checksum-pinned helpers
+in a release-infrastructure change. This prerequisite is independent of Apple membership;
+the read-only readiness command deliberately reports it as open until resolved in code
+and documentation. No message requesting source has been sent to the provider.
+
+The app now bundles the FFmpeg GPLv3 text from the upstream `n9.0.2` tag, Netflix's
+BSD-2-Clause-Patent license from `v3.2.0`, Sparkle's pinned license, and a third-party
+notice identifying the distribution status. These notices improve the package but do
+not claim to finish the corresponding-source requirement.
