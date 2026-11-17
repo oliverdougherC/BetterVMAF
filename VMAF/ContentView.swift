@@ -338,7 +338,10 @@ struct VMAFView: View {
         // Set self as delegate to receive progress updates
         calculator.delegate = self
         
+        let activity = ComparisonActivity.shared
+        let comparisonID = activity.begin()
         Task {
+            defer { activity.end(comparisonID) }
             do {
                 let result = try await calculator.calculateVMAF(
                     referenceVideo: reference,

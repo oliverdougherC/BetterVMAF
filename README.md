@@ -34,7 +34,7 @@ cd BetterVMAF
 open VMAF.xcodeproj
 ```
 
-Use the shared **VMAF** scheme. See [CONTRIBUTING.md](CONTRIBUTING.md) for build/test commands, workflow, and packaging. `./create_dmg.sh` creates `Better-VMAF.dmg`.
+Use the shared **VMAF** scheme. See [CONTRIBUTING.md](CONTRIBUTING.md) for build and test commands and [Releasing BetterVMAF](docs/RELEASING.md) for local packaging, Sparkle, and distribution.
 
 ## License and dependencies
 

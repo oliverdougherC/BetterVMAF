@@ -376,14 +376,10 @@ class VMAFCalculator {
         }
         process.environment = env
         
-        // Check if we can run ffmpeg directly or need to use a helper shell
-        if !FileManager.default.isExecutableFile(atPath: command[0]) {
-            // If ffmpeg is not executable directly, try using bash to execute it
-            print("ffmpeg not directly executable, trying via /bin/sh")
-            process.executableURL = URL(fileURLWithPath: "/bin/sh")
-            process.arguments = ["-c", command.joined(separator: " ")]
+        guard FileManager.default.isExecutableFile(atPath: command[0]) else {
+            throw VMAFError.permissionDenied
         }
-        
+
         let outputPipe = Pipe()
         process.standardError = outputPipe
         process.standardOutput = outputPipe

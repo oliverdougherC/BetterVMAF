@@ -188,7 +188,10 @@ struct VMAFBatchView: View {
         validationMessage = nil
         batchError = nil
         
+        let activity = ComparisonActivity.shared
+        let comparisonID = activity.begin()
         Task {
+            defer { activity.end(comparisonID) }
             // Determine which items need processing (skip already completed).
             let pendingIndices = await MainActor.run { comparisons.indices.filter { comparisons[$0].status != .completed } }
             if pendingIndices.isEmpty {

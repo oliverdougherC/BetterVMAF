@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		098FD16B72AF42F990C6A001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 098FD16B72AF42F990C6A002 /* Sparkle */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		33175F802D77B32700B364A8 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -24,6 +28,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		098FD16B72AF42F990C6A006 /* Config/Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Version.xcconfig; sourceTree = SOURCE_ROOT; };
 		33175F6E2D77B32600B364A8 /* Better VMAF.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Better VMAF.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		33175F7F2D77B32700B364A8 /* Better VMAF Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Better VMAF Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		33175F892D77B32700B364A8 /* Better VMAF UI Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Better VMAF UI Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -52,6 +57,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				098FD16B72AF42F990C6A001 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -75,6 +81,7 @@
 		33175F652D77B32600B364A8 = {
 			isa = PBXGroup;
 			children = (
+				098FD16B72AF42F990C6A006 /* Config/Version.xcconfig */,
 				33175F702D77B32600B364A8 /* VMAF */,
 				33175F822D77B32700B364A8 /* VMAFTests */,
 				33175F8C2D77B32700B364A8 /* VMAFUITests */,
@@ -112,6 +119,7 @@
 			);
 			name = VMAF;
 			packageProductDependencies = (
+				098FD16B72AF42F990C6A002 /* Sparkle */,
 			);
 			productName = VMAF;
 			productReference = 33175F6E2D77B32600B364A8 /* Better VMAF.app */;
@@ -195,6 +203,9 @@
 			);
 			mainGroup = 33175F652D77B32600B364A8;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				098FD16B72AF42F990C6A003 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 33175F6F2D77B32600B364A8 /* Products */;
 			projectDirPath = "";
@@ -393,13 +404,13 @@
 		};
 		33175F942D77B32700B364A8 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 098FD16B72AF42F990C6A006 /* Config/Version.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = VMAF/VMAF.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"VMAF/Preview Content\"";
 				ENABLE_APP_SANDBOX = YES;
@@ -408,6 +419,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Updater.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Better VMAF";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -416,7 +428,6 @@
 					"@executable_path/../Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = neurophasia.BetterVMAF;
 				PRODUCT_MODULE_NAME = VMAF;
 				PRODUCT_NAME = "Better VMAF";
@@ -430,13 +441,13 @@
 		};
 		33175F952D77B32700B364A8 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 098FD16B72AF42F990C6A006 /* Config/Version.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = VMAF/VMAF.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"VMAF/Preview Content\"";
 				ENABLE_APP_SANDBOX = YES;
@@ -445,6 +456,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Updater.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Better VMAF";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -453,7 +465,6 @@
 					"@executable_path/../Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = neurophasia.BetterVMAF;
 				PRODUCT_MODULE_NAME = VMAF;
 				PRODUCT_NAME = "Better VMAF";
@@ -573,6 +584,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		098FD16B72AF42F990C6A003 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = exactVersion;
+				version = 2.10.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		098FD16B72AF42F990C6A002 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 098FD16B72AF42F990C6A003 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 33175F662D77B32600B364A8 /* Project object */;
 }
