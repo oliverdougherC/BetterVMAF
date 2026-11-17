@@ -396,13 +396,17 @@ private struct HeatmapPlot: View {
         context.stroke(meanPath, with: .color(.primary.opacity(0.45)), lineWidth: 1)
     }
 
-    /// One rect per frame, each extending to the next frame's position, so a
-    /// zoomed-in view reads as a continuous band rather than scattered dots.
+    /// One rect per frame, each covering the interval up to the next sample —
+    /// but never more than the clip's measured cadence. Contiguous 30 fps data
+    /// marks exactly abut, so a zoomed view reads as one band; sparse or
+    /// sampled results (`--step`, dropped frames) get a real gap instead of
+    /// seconds that were never measured painted in the previous frame's score.
+    /// A dotted bridge across each gap keeps the clip's shape traceable without
+    /// claiming the missing interval holds either neighbour's score.
     private func drawExactFrames(_ context: inout GraphicsContext, plot: CGRect) {
         let range = timeline.slice(covering: domain)
         guard !range.isEmpty else { return }
         let height = max(4, min(8, plot.height / 40))
-        let span = averageFrameSpan(in: range)
         // Start one frame before the window so a mark that begins off-screen
         // left still paints its visible sliver; the canvas clips the rest.
         let first = max(0, range.lowerBound - 1)
@@ -413,29 +417,50 @@ private struct HeatmapPlot: View {
             )
         }
         let sampleSpacing = points.count > 1 ? abs(points[1].x - points[0].x) : 0
+        let pixelsPerSecond = geometry.dataWidth / CGFloat(max(0.0001, domain.upperBound - domain.lowerBound))
+        let cadence = max(2, CGFloat(timeline.medianFrameSpan) * pixelsPerSecond)
+        // A sample further from its neighbour than half again the cadence is a
+        // measured gap, not frame-rate rounding.
+        let gapThreshold = cadence * 1.5
 
         // Once frames are clearly separated, a faint trace through them keeps
         // the shape of the clip readable; the marks stay the primary evidence.
+        // The trace breaks at gaps: a line straight across unmeasured seconds
+        // would claim them like a too-wide mark would.
         if sampleSpacing > 3, points.count > 1 {
             let trace = Path { path in
-                path.addLines(points)
+                var runStart = 0
+                for position in 1..<points.count where points[position].x - points[position - 1].x > gapThreshold {
+                    path.addLines(points[runStart..<position].map { $0 })
+                    runStart = position
+                }
+                path.addLines(points[runStart..<points.count].map { $0 })
             }
             context.stroke(trace, with: .color(.primary.opacity(0.28)), lineWidth: 1)
         }
 
-        let pixelsPerSecond = geometry.dataWidth / CGFloat(max(0.0001, domain.upperBound - domain.lowerBound))
         for (position, index) in (first..<range.upperBound).enumerated() {
             let score = timeline.score(at: index)
             let x = points[position].x
-            let width = timeline.metrics.indices.contains(index + 1) && position + 1 < points.count
-                ? max(2, points[position + 1].x - x)
-                : max(2, CGFloat(span) * pixelsPerSecond)
-            // Square-edged and contiguous: rounding each mark's ends would notch
-            // between every pair and turn the band into scattered dots.
+            let toNext = position + 1 < points.count ? max(2, points[position + 1].x - x) : cadence
+            // Square-edged and contiguous where samples are contiguous:
+            // rounding each mark's ends would notch between every pair and
+            // turn the band into scattered dots.
             context.fill(
-                Path(CGRect(x: x, y: points[position].y - height / 2, width: width, height: height)),
+                Path(CGRect(x: x, y: points[position].y - height / 2, width: min(toNext, cadence), height: height)),
                 with: .color(QualityScale.color(at: score))
             )
+            if toNext > gapThreshold {
+                let next = points[position + 1]
+                context.stroke(
+                    Path { path in
+                        path.move(to: CGPoint(x: x + min(toNext, cadence), y: points[position].y))
+                        path.addLine(to: next)
+                    },
+                    with: .color(.primary.opacity(0.18)),
+                    style: StrokeStyle(lineWidth: 1, dash: [2, 3])
+                )
+            }
         }
     }
 
@@ -494,14 +519,6 @@ private struct HeatmapPlot: View {
         }
     }
 
-    private func averageFrameSpan(in range: Range<Int>) -> TimeInterval {
-        guard range.count > 1 else { return 1.0 / 30.0 }
-        let first = timeline.time(at: range.lowerBound)
-        let last = timeline.time(at: range.upperBound - 1)
-        guard last > first else { return 1.0 / 30.0 }
-        return (last - first) / Double(range.count - 1)
-    }
-
     private func horizontal(minX: CGFloat, maxX: CGFloat, y: CGFloat) -> Path {
         Path {
             $0.move(to: CGPoint(x: minX, y: y))
@@ -556,14 +573,21 @@ private struct HeatmapTooltip: View {
             }
             Text("ADM2 \(String(format: "%.3f", metric.integerAdm2))")
 
-            if let run = hover.run, run.count > 1 {
+            // The interval is defined by the *hovered* frame's threshold: it
+            // spans frames at that score band or worse. Naming it after the
+            // worst frame inside would claim, e.g., that a Fair stretch
+            // containing a single Poor frame is entirely Poor. Shown for a
+            // single frame too — the isolated bad frame is exactly what a
+            // reader is inspecting, not something to hide.
+            if let run = hover.run {
                 Divider()
-                // The interval is defined by the *hovered* frame's threshold:
-                // it spans frames at that score band or worse. Naming it after
-                // the worst frame inside would claim, e.g., that a Fair stretch
-                // containing a single Poor frame is entirely Poor.
-                Text("\(band.rawValue)-or-worse: \(timeline.frameNumber(at: run.lowerBound))–\(timeline.frameNumber(at: run.upperBound)) · \(TimeFormat.duration(timeline.time(at: run.upperBound) - timeline.time(at: run.lowerBound)))")
-                    .foregroundStyle(band.tint)
+                if run.count == 1 {
+                    Text("\(band.rawValue)-or-worse: isolated frame \(timeline.frameNumber(at: run.lowerBound)) · \(TimeFormat.duration(timeline.runSpan(run)))")
+                        .foregroundStyle(band.tint)
+                } else {
+                    Text("\(band.rawValue)-or-worse: \(timeline.frameNumber(at: run.lowerBound))–\(timeline.frameNumber(at: run.upperBound)) · \(TimeFormat.duration(timeline.runSpan(run)))")
+                        .foregroundStyle(band.tint)
+                }
             }
 
             if let bucket = hover.bucket, bucket.frameCount > 1 {

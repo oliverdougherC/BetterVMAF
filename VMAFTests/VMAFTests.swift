@@ -7,6 +7,7 @@
 
 import AppKit
 import Foundation
+import SwiftUI
 import Testing
 @testable import VMAF
 
@@ -472,10 +473,10 @@ struct QualityTimelineTests {
         let domain = timeline.timeRange
         let bucket = try #require(timeline.buckets(count: 1, covering: domain).first)
         #expect(bucket.frameCount == 50)
-        let worst = timeline.nearestIndex(in: bucket, toScore: 70.2)
+        let worst = timeline.nearestIndex(in: bucket, toScore: 70.2, nearTime: bucket.startTime)
         #expect(timeline.score(at: worst) == 70.0, "hover at the dip named \(timeline.score(at: worst))")
         // Pointer at the top of the same column still names a 98-scoring frame.
-        let top = timeline.nearestIndex(in: bucket, toScore: 97.9)
+        let top = timeline.nearestIndex(in: bucket, toScore: 97.9, nearTime: bucket.startTime)
         #expect(timeline.score(at: top) == 98.0)
     }
 
@@ -608,6 +609,172 @@ struct QualityTimelineTests {
         // The app's known negative first timestamp stays well-formed.
         #expect(TimeFormat.exact(-0.0333) == "-0:00.033")
     }
+
+    @Test func scoreTiesBreakTowardTheCursorTime() throws {
+        // F1 (round 3): 300 consecutive frames all scoring 98 aggregate into
+        // one column. Score alone ties every frame, so without a time
+        // tie-break the tooltip names the column's first frame ~10s before
+        // the moment being inspected.
+        let timeline = QualityTimeline(metrics: frames([Double](repeating: 98.0, count: 300)))
+        let domain = timeline.timeRange
+        let bucket = try #require(timeline.buckets(count: 1, covering: domain).first)
+        #expect(bucket.frameCount == 300)
+
+        let frame = 1.0 / 30.0
+        let nearStart = timeline.nearestIndex(in: bucket, toScore: 98.0, nearTime: domain.lowerBound)
+        let nearEnd = timeline.nearestIndex(in: bucket, toScore: 98.0, nearTime: domain.upperBound)
+        #expect(abs(timeline.time(at: nearStart) - domain.lowerBound) <= frame)
+        #expect(abs(timeline.time(at: nearEnd) - domain.upperBound) <= frame,
+                "hover at the far edge named \(timeline.time(at: nearEnd))s, \(domain.upperBound - timeline.time(at: nearEnd))s early")
+        // Through the hover path too: the tooltip names the inspected moment.
+        let late = try #require(timeline.hoverTarget(atTime: domain.upperBound - 0.1, score: 98.0,
+                                                     columns: 675, domain: domain))
+        #expect(abs(timeline.time(at: late.index) - (domain.upperBound - 0.1)) <= frame)
+    }
+
+    @Test func emptyColumnHasNoBucketAndFallsBackToTheNearestSample() throws {
+        // F3 (round 3): a sparse clip leaves empty columns; claiming the
+        // neighbouring bucket would show counts and scores for frames the
+        // cursor is not over. The empty column reports nil, and the hover
+        // path names the nearest sample *without* a column summary.
+        // Samples bunched at the clip's ends: columns cover 45s each, and the
+        // middle two are empty. 67.5s sits in the [45, 90) column, which no
+        // sample belongs to.
+        var metrics: [VMAFCalculator.FrameMetric] = []
+        for frameNumber in [1, 301, 5101, 5401] {   // t = 0, 10, 170, 180
+            metrics.append(VMAFCalculator.FrameMetric(
+                frameNumber: frameNumber, vmafScore: 96.0,
+                integerMotion: nil, integerMotion2: nil, integerAdm2: 0.95,
+                integerAdmScales: [0.9, 0.9, 0.9, 0.9],
+                integerVifScales: [0.9, 0.9, 0.9, 0.9]))
+        }
+        let timeline = QualityTimeline(metrics: metrics)
+        let domain = timeline.timeRange
+        #expect(domain == 0...180)
+
+        #expect(timeline.bucket(coveringTime: 67.5, columns: 4, domain: domain) == nil,
+                "an empty column returned a neighbour's bucket")
+        let target = try #require(timeline.hoverTarget(atTime: 67.5, score: 96.0, columns: 4, domain: domain))
+        #expect(target.bucket == nil, "hover in an empty column borrowed a neighbour's summary")
+        #expect(timeline.time(at: target.index) == 10, "fallback should name the nearer sample")
+
+        // A cursor in an *occupied* column still gets that column's summary.
+        let filled = try #require(timeline.bucket(coveringTime: 10, columns: 4, domain: domain))
+        #expect(filled.frameCount == 2)
+    }
+
+    @Test func cadenceIsTheMeasuredSampleSpacing() {
+        // F4 (round 3): marks may extend to the next sample but no further
+        // than the clip's actual cadence — the value the renderer caps with.
+        // Contiguous 30 fps data: exactly 1/30, so abutting bands are
+        // unchanged. A sparse --step result: its own spacing, honestly wide.
+        let contiguous = QualityTimeline(metrics: frames([Double](repeating: 98.0, count: 300)))
+        #expect(abs(contiguous.medianFrameSpan - 1.0 / 30.0) < 0.0001)
+
+        // Sampled every 100th frame: real cadence is 100/30.
+        var stepped: [VMAFCalculator.FrameMetric] = []
+        for step in 0..<300 {
+            stepped.append(VMAFCalculator.FrameMetric(
+                frameNumber: step * 100 + 1, vmafScore: 98.0,
+                integerMotion: nil, integerMotion2: nil, integerAdm2: 0.95,
+                integerAdmScales: [0.9, 0.9, 0.9, 0.9],
+                integerVifScales: [0.9, 0.9, 0.9, 0.9]))
+        }
+        #expect(abs(QualityTimeline(metrics: stepped).medianFrameSpan - 100.0 / 30.0) < 0.01)
+
+        // One lone dropped sample inside contiguous data must not widen the
+        // cap: the median ignores it, so the gap renders as a gap.
+        var holey: [VMAFCalculator.FrameMetric] = []
+        for index in 0..<300 where index != 150 {  // frame 151 missing
+            holey.append(VMAFCalculator.FrameMetric(
+                frameNumber: index + 1, vmafScore: 98.0,
+                integerMotion: nil, integerMotion2: nil, integerAdm2: 0.95,
+                integerAdmScales: [0.9, 0.9, 0.9, 0.9],
+                integerVifScales: [0.9, 0.9, 0.9, 0.9]))
+        }
+        #expect(abs(QualityTimeline(metrics: holey).medianFrameSpan - 1.0 / 30.0) < 0.0001,
+                "a single dropped frame widened the mark cap and would paint over it")
+    }
+
+    @Test func runSpanIncludesTheFinalFrameAndIdentifiesIsolatedRuns() throws {
+        // F5 (round 3): two consecutive 30 fps frames occupy 0.067s, not the
+        // 0.033s a difference of timestamps reports — and one isolated bad
+        // frame has a duration too, so it can be labelled rather than hidden.
+        let isolated = QualityTimeline(metrics: frames([98, 80, 98]))  // dip at frame 2
+        let run = try #require(isolated.bandRun(containing: 1))
+        #expect(run == 1...1, "an isolated dip must be a single-frame run")
+        #expect(abs(isolated.runSpan(run) - 1.0 / 30.0) < 0.0001,
+                "isolated frame reported \(isolated.runSpan(run))s")
+
+        let pair = QualityTimeline(metrics: frames([80, 80, 98]))
+        let two = try #require(pair.bandRun(containing: 0))
+        #expect(two == 0...1)
+        #expect(abs(pair.runSpan(two) - 2.0 / 30.0) < 0.0001,
+                "a two-frame run occupies two frames, not one")
+    }
+
+    @Test func legendStopsMatchTheRampAcrossTheWholeDomain() {
+        // F2 (round 3): the legend bar interpolates its stops in encoded
+        // sRGB, but the plot ramps in linear light — uniformly-spaced stops
+        // drift badly between anchors (13 stops put 95 at an olive
+        // (0.61, 0.62, 0.27) vs the plot's (0.92, 0.80, 0.17)). Stops must
+        // sit on the ramp's own anchors and be dense enough that the encoded
+        // chord tracks the curve.
+        for domain in [QualityScale.rampDomain, 0.0...100.0, 90.0...100.0, 93.0...95.0] {
+            let stops = QualityScale.legendStops(in: domain)
+            #expect(stops.count >= 3, "\(domain): a gradient this coarse is the bug")
+            // Locations span the bar exactly once, in order.
+            #expect(stops.first?.location == 0)
+            #expect(stops.last?.location == 1)
+            for index in 1..<stops.count {
+                #expect(stops[index].location >= stops[index - 1].location)
+            }
+            // At every anchor inside the domain, a stop carries the plot's
+            // exact colour.
+            for anchor in QualityScale.anchorScores where anchor > domain.lowerBound && anchor < domain.upperBound {
+                let expected = srgbOf(QualityScale.color(at: anchor))
+                let location = CGFloat((anchor - domain.lowerBound) / (domain.upperBound - domain.lowerBound))
+                let matching = stops.filter { abs($0.location - location) < 0.0001 }
+                #expect(!matching.isEmpty, "no stop at anchor \(anchor)")
+                if let stop = matching.first {
+                    let found = srgbOf(stop.color)
+                    for channel in 0..<3 {
+                        #expect(abs(found[channel] - expected[channel]) < 0.004,
+                                "\(domain): anchor \(anchor) off by \(abs(found[channel] - expected[channel]))")
+                    }
+                }
+            }
+            // Between consecutive stops the encoded chord may not leave the
+            // true curve by a visible amount (≲ half an 8-bit step).
+            let span = domain.upperBound - domain.lowerBound
+            for index in 0..<(stops.count - 1) {
+                let a = domain.lowerBound + Double(stops[index].location) * span
+                let b = domain.lowerBound + Double(stops[index + 1].location) * span
+                let ca = srgbOf(stops[index].color)
+                let cb = srgbOf(stops[index + 1].color)
+                for step in 1...4 {
+                    let t = Double(step) / 5
+                    let mid = a + (b - a) * t
+                    let trueColor = srgbOf(QualityScale.color(at: mid))
+                    let chord = (0..<3).map { ca[$0] + (cb[$0] - ca[$0]) * CGFloat(t) }
+                    for channel in 0..<3 {
+                        #expect(abs(chord[channel] - trueColor[channel]) < 0.02,
+                                "\(domain): legend drift at \(String(format: "%.1f", mid)) VMAF = \(abs(chord[channel] - trueColor[channel])) per channel")
+                    }
+                }
+            }
+        }
+    }
+
+    private func srgbOf(_ color: Color) -> [CGFloat] {
+        guard let ns = NSColor(color).usingColorSpace(.sRGB) else {
+            Issue.record("colour could not be read back"); return [0, 0, 0]
+        }
+        return [ns.redComponent, ns.greenComponent, ns.blueComponent]
+    }
+
+    /// `#require` in a value context without throwing from helper chains.
+    private func XCTUnwrapShim<T>(_ value: T?) -> T? { value }
 
     @Test func everyTickStrideLabelsItsOwnGridline() {
         // Regression: the 0.25 s stride printed one decimal place, so a

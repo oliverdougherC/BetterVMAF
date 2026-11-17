@@ -60,6 +60,12 @@ struct QualityTimeline {
     }
 
     let metrics: [VMAFCalculator.FrameMetric]
+    /// The clip's measured cadence: the median gap between consecutive samples,
+    /// in seconds (1/30 when there is nothing to measure). A mark may represent
+    /// the interval up to the next sample, but never more than this — otherwise
+    /// sparse or sampled results paint seconds that were never measured as if
+    /// they held the preceding frame's score.
+    let medianFrameSpan: TimeInterval
     /// `QualityBand.allCases` index per frame, precomputed for run detection.
     let bandIndices: [Int]
     /// For each frame, the bounds of the longest span through it whose frames
@@ -100,6 +106,12 @@ struct QualityTimeline {
         }
         self.metrics = input
 
+        // Median gap between consecutive samples: the clip's measured cadence.
+        // Stride-capped so building a 1M-frame timeline stays linear-ish; the
+        // median of every 244th gap is the same number for any constant or
+        // near-constant frame rate.
+        medianFrameSpan = Self.measuredCadence(of: input)
+
         var builtBands: [Int] = []
         builtBands.reserveCapacity(input.count)
         var minScore = Double.greatestFiniteMagnitude
@@ -131,6 +143,30 @@ struct QualityTimeline {
         } else {
             scoreRange = minScore...maxScore
         }
+    }
+
+    /// Median consecutive-sample gap, capped to a bounded number of samples so
+    /// building a giant timeline stays cheap: for any constant or near-constant
+    /// frame rate, the median of a strided subset equals the true median.
+    ///
+    /// The median — not the mean — is the right statistic: uniform 30 fps data
+    /// gets exactly 1/30 so contiguous marks are unchanged, and one dropped
+    /// sample or a sparse stretch raises it no further than the clip's actual
+    /// cadence.
+    private static func measuredCadence(of metrics: [VMAFCalculator.FrameMetric]) -> TimeInterval {
+        guard metrics.count > 1 else { return 1.0 / 30.0 }
+        let stride = max(1, metrics.count / 4096)
+        var gaps: [TimeInterval] = []
+        gaps.reserveCapacity(metrics.count / stride + 1)
+        var index = stride
+        while index < metrics.count {
+            let gap = (metrics[index].timestamp - metrics[index - stride].timestamp) / Double(stride)
+            if gap > 0 { gaps.append(gap) }
+            index += stride
+        }
+        gaps.sort()
+        guard !gaps.isEmpty else { return 1.0 / 30.0 }
+        return min(gaps[gaps.count / 2], 60)
     }
 
     /// For each index, the widest span around it whose bands are all at or
@@ -209,12 +245,14 @@ struct QualityTimeline {
     ///
     /// When the cursor is inside a column summarizing several frames, the
     /// cursor's score picks which of them it is pointing at (a spike's bad
-    /// frame, not a neighbour at the same x); otherwise the time-nearest frame
-    /// is the answer.
+    /// frame, not a neighbour at the same x), with ties broken by the cursor's
+    /// time. A column with no frames at all contributes no bucket: the tooltip
+    /// then names the nearest sample by time and honestly omits the column
+    /// summary rather than borrowing a neighbour's.
     func hoverTarget(atTime time: TimeInterval, score: Double, columns: Int, domain: ClosedRange<TimeInterval>) -> (index: Int, bucket: Bucket?)? {
         guard frameCount > 0 else { return nil }
         if let column = bucket(coveringTime: time, columns: columns, domain: domain), column.frameCount > 1 {
-            return (nearestIndex(in: column, toScore: score), column)
+            return (nearestIndex(in: column, toScore: score, nearTime: time), column)
         }
         guard let index = nearestIndex(for: time) else { return nil }
         return (index, nil)
@@ -229,13 +267,21 @@ struct QualityTimeline {
     /// 70 mark. Within the column the cursor's score picks the frame, so the
     /// tooltip names the marker it is actually on; at the bottom of the column
     /// that is `worstIndex`, the bad frame the dip was drawn for.
-    func nearestIndex(in bucket: Bucket, toScore score: Double) -> Int {
+    ///
+    /// Equal score distances — a static scene where every frame in the column
+    /// scores 98 — are broken by time: the frame nearest the cursor's x wins,
+    /// so the tooltip names the moment being inspected, not the column's first
+    /// frame seconds earlier.
+    func nearestIndex(in bucket: Bucket, toScore score: Double, nearTime time: TimeInterval) -> Int {
         var best = bucket.worstIndex
         var bestDistance = Double.greatestFiniteMagnitude
+        var bestTimeDistance = Double.greatestFiniteMagnitude
         for index in bucket.startIndex..<max(bucket.startIndex + 1, bucket.endIndex) {
             let distance = abs(metrics[index].vmafScore - score)
-            if distance < bestDistance {
+            let timeDistance = abs(metrics[index].timestamp - time)
+            if distance < bestDistance || (distance == bestDistance && timeDistance < bestTimeDistance) {
                 bestDistance = distance
+                bestTimeDistance = timeDistance
                 best = index
             }
         }
@@ -250,6 +296,18 @@ struct QualityTimeline {
         // A frame already in the top band has no concern interval to escalate.
         guard bandIndices[index] < QualityBand.excellent.caseIndex else { return nil }
         return runLeft[index]...runRight[index]
+    }
+
+    /// The wall-clock interval a run of frames covers: first sample to last,
+    /// plus one frame interval, because the last frame is itself a measured
+    /// slice of video. `time(last) - time(first)` alone under-reports a
+    /// two-frame run at 30 fps as 0.03s when it occupies 0.067s — and reports
+    /// a single bad frame as 0.
+    func runSpan(_ run: ClosedRange<Int>) -> TimeInterval {
+        guard metrics.indices.contains(run.lowerBound), metrics.indices.contains(run.upperBound) else {
+            return 0
+        }
+        return metrics[run.upperBound].timestamp - metrics[run.lowerBound].timestamp + medianFrameSpan
     }
 
     // MARK: - Detail selection
@@ -437,7 +495,9 @@ struct QualityTimeline {
         return (columnCount, column)
     }
 
-    /// The bucket a timestamp falls into.
+    /// The bucket a timestamp falls into — or `nil` when its column contains
+    /// no frames. A sparse clip leaves empty columns; claiming a neighbouring
+    /// column would show the tooltip for frames the cursor is not over.
     func bucket(coveringTime time: TimeInterval, columns: Int, domain: ClosedRange<TimeInterval>) -> Bucket? {
         guard let layout = columnLayout(for: time, columns: columns, domain: domain) else { return nil }
         let built = buckets(count: layout.columnCount, covering: domain)
@@ -445,8 +505,7 @@ struct QualityTimeline {
         // The frame was counted into its own column's bucket by the same
         // arithmetic, so match that column's start directly.
         let target = domain.lowerBound + span * Double(layout.column) / Double(layout.columnCount)
-        if let exact = built.first(where: { $0.startTime == target }) { return exact }
-        return built.min { abs($0.startTime - target) < abs($1.startTime - target) }
+        return built.first(where: { $0.startTime == target })
     }
 
     // MARK: - Cache

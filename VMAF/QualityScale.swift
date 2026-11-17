@@ -174,17 +174,72 @@ enum QualityScale {
 
     static func color(at score: Double) -> Color { rgb(at: score).color }
 
+    /// The scores where the ramp changes slope, exposed so the legend can put
+    /// a stop on each one.
+    static var anchorScores: [Double] { anchors.map { $0.score } }
+
     /// Gradient stops across `rampDomain`, for the legend bar.
+    ///
+    /// The ramp is piecewise-linear **in linear light**, but a gradient
+    /// interpolates its stops in display-encoded sRGB — so uniformly spaced
+    /// samples drift off the plot's curve (13 stops put the legend near an
+    /// olive `(0.61, 0.62, 0.27)` at 95 where the heat map paints
+    /// `(0.92, 0.80, 0.17)`). Stops therefore sit on every slope change, and
+    /// each span is subdivided into as many pieces as its own curvature
+    /// demands to hold the chord within ~1.5/255 of the plot's colour.
     static func legendStops(in domain: ClosedRange<Double> = rampDomain) -> [Gradient.Stop] {
-        let steps = 12
         let span = domain.upperBound - domain.lowerBound
         guard span > 0 else { return [Gradient.Stop(color: color(at: domain.lowerBound), location: 0)] }
-        return (0...steps).map { step in
-            let location = Double(step) / Double(steps)
-            return Gradient.Stop(
-                color: color(at: domain.lowerBound + span * location),
-                location: location
-            )
+        var knots: [Double] = [domain.lowerBound]
+        for anchor in anchorScores where anchor > domain.lowerBound && anchor < domain.upperBound {
+            knots.append(anchor)
         }
+        knots.append(domain.upperBound)
+        var stops: [Gradient.Stop] = []
+        for index in 0..<(knots.count - 1) {
+            let start = knots[index]
+            let end = knots[index + 1]
+            let pieces = legendPieces(from: start, to: end)
+            for piece in 0..<pieces {
+                let score = start + (end - start) * Double(piece) / Double(pieces)
+                stops.append(Gradient.Stop(
+                    color: color(at: score),
+                    location: CGFloat((score - domain.lowerBound) / span)
+                ))
+            }
+        }
+        stops.append(Gradient.Stop(color: color(at: domain.upperBound), location: 1))
+        return stops
+    }
+
+    /// Pieces a straight encoded-space chord between `start` and `end` needs
+    /// to stay within tolerance of the ramp: measured, not guessed, so flat
+    /// spans (deep red below 88) get two stops and sharp turns (97→99) get
+    /// many more.
+    private static func legendPieces(from start: Double, to end: Double) -> Int {
+        let encodedStart = encodedRGB(at: start)
+        let encodedEnd = encodedRGB(at: end)
+        var worst = 0.0
+        for step in 1...8 {
+            let t = Double(step) / 9
+            let curve = encodedRGB(at: start + (end - start) * t)
+            for channel in 0...2 {
+                let chord = encodedStart[channel] + (encodedEnd[channel] - encodedStart[channel]) * t
+                worst = max(worst, abs(chord - curve[channel]))
+            }
+        }
+        // Empirical, not textbook: doubling stops on the sharpest spans
+        // (97→99) halves the chord error, so linear subdivision holds the
+        // budget conservatively. Cap keeps a degenerate domain bounded; total
+        // stops across 0–100 stay well under 100.
+        let tolerance = 1.2 / 255
+        guard worst > tolerance else { return 2 }
+        let pieces = Int((worst / tolerance).rounded(.up))
+        return max(2, min(32, pieces))
+    }
+
+    private static func encodedRGB(at score: Double) -> [Double] {
+        let linear = rgb(at: score)
+        return [RGB.encoded(linear.red), RGB.encoded(linear.green), RGB.encoded(linear.blue)]
     }
 }
