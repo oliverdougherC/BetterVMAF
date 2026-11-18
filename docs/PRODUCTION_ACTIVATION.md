@@ -1,85 +1,104 @@
-# Production activation
+# Activate the first signed release
 
-1. **Renew Apple Developer Program membership** in your Apple account. Do not buy a
-   different account or change the bundle identifier. Confirm the team has accepted
-   current agreements. Membership renewal itself is a maintainer action.
-2. On a trusted Mac, as the Apple account holder:
-   - In Keychain Access, use **Certificate Assistant → Request a Certificate From a
-     Certificate Authority**, saving the CSR to disk. In the developer account's
-     **Certificates, Identifiers & Profiles → Certificates → + → Developer ID Application**,
-     upload that CSR and download/install the certificate on the same Mac. In Keychain
-     Access's **My Certificates**, expand the identity to confirm its private key is
-     present, then export the identity and private key as a password-protected `.p12`.
-     Record the 10-character team ID from Membership Details. This pipeline uses a
-     locally exportable Developer ID Application identity.
-     [Apple's certificate procedure](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/).
-   - In App Store Connect, open **Users and Access → Integrations → App Store Connect
-     API → Team Keys → Generate API Key**. Request API access first if prompted. Use
-     a dedicated release key with **Developer** access (which permits notarization), download its `.p8` once,
-     and record the key ID and issuer UUID. Keep a secure backup of the downloaded key.
-     This pipeline passes `--issuer` and requires a **team** key; individual API keys
-     are not supported by this setup.
-     [Apple's API-key procedure](https://developer.apple.com/documentation/appstoreconnectapi/creating-api-keys-for-app-store-connect-api) and [role permissions](https://developer.apple.com/help/account/access/roles/).
-   See [Apple's notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
-3. Provision the remaining GitHub settings from this repository checkout. Enter
-   passwords/identifiers interactively, without putting their values in shell history:
-   ```bash
-   gh variable set APPLE_TEAM_ID
-   base64 -i /private/path/DeveloperID.p12 | gh secret set APPLE_CERTIFICATE_P12 --env release-signing
-   gh secret set APPLE_CERTIFICATE_PASSWORD --env release-signing
-   base64 -i /private/path/AuthKey.p8 | gh secret set APPLE_NOTARY_KEY --env release-signing
-   gh secret set APPLE_NOTARY_KEY_ID --env release-signing
-   gh secret set APPLE_NOTARY_ISSUER_ID --env release-signing
-   ```
-4. Finish the non-Apple prerequisites **before** readiness is declared:
-   - Create and test the stable Sparkle identity and offline backup using the procedure
-     in [RELEASING.md](RELEASING.md#trusted-mac-sparkle-setup). This can happen before renewal.
-   - Confirm the [FFmpeg source and notices](ENGINE_PROVENANCE.md#release-readiness-source-audit-2026-11-17)
-     are available at the pinned origin and match the bundled helpers. The
-     preflight includes both archives for review.
-   - Review and merge the release-readiness PR yourself. The setup agent leaves it unmerged.
-   - Run the staging update's install/relaunch acceptance test on an available desktop;
-     validate on a physical Intel Mac as well as Apple Silicon before publication.
-5. From current reviewed `main`, run the read-only audit, then a genuine signed build:
-   ```bash
-   python3 scripts/release/readiness.py
-   gh workflow run release.yml --ref main -f mode=production-preflight
-   ```
-   The audit lists missing settings without retrieving secret values and checks the
-   pinned source archives. A passing audit checks configuration. The workflow proves
-   real signing and notarization. Find the new run in
-   Actions or with `gh run list --workflow release.yml`, then inspect its logs and
-   download `signed-release` with `gh run download RUN_ID --name signed-release`.
-   Preflight creates **no tag, draft, release, or Pages deployment**. Missing credentials
-   fail in `credentials`, before CI or packaging. Running production preflight on a
-   feature branch fails explicitly; signing environments allow only `main` and `v*`.
-6. Check the downloaded DMG on clean Macs: mount, copy to Applications, launch through
-   Finder, run the fixture, export a result, and inspect its notarization and Gatekeeper
-   checks. The workflow checks the final DMG and mounted app, both staples, exact app
-   entitlements, every Sparkle component's team/runtime/timestamp, both pinned helpers,
-   EdDSA signatures, version/build, architecture, resources and SHA-256. Real acceptance
-   requires genuine credentials; ad-hoc staging cannot establish it. Keep this signed preflight app as an old-version test copy. Choose a higher final
-   release version so this copy can exercise the real production update after publication.
-7. Choose the first release version after reviewing the existing historical `1.4` draft.
-   Do not overwrite it. The current config is `1.4.0`; choose a higher version (for example `1.4.1`) if
-   retaining the `1.4.0` preflight copy for the first production update test. If the
-   historical `1.4` draft is published first, the new version must sort above it. Land the version change on `main`, rerun preflight, then follow
-   [Version and publish](RELEASING.md#version-and-publish) to create the annotated `vX.Y.Z`
-   tag **when you authorize production release work**. Review the generated draft and
-   complete assets including the source and notices ZIPs, release notes and clean-Mac acceptance before
-   publishing it as stable. A signing failure cannot create a draft; an existing release
-   is never overwritten.
-8. Publish the reviewed draft manually. Confirm **Deploy stable appcast** succeeds and
-   the production URL serves the byte-identical signed `appcast.xml` from the release:
-   ```bash
-   curl --fail --location https://oliverdougherc.github.io/BetterVMAF/appcast.xml -o /tmp/bettervmaf-published-appcast.xml
-   cmp /path/to/downloaded/appcast.xml /tmp/bettervmaf-published-appcast.xml
-   ```
-   From an older Sparkle-enabled production installation, choose **Check for Updates…**,
-   install and relaunch, verify the new version and run the fixture again. Pre-Sparkle
-   historical installations require one manual installation. Confirm “up to date” on
-   a second check. If publication used `GITHUB_TOKEN`, run `appcast.yml` manually on
-   `main` because GitHub suppresses the token's release event.
+## Current checkpoint
 
-The offline backup, PR review and merge, source attachment verification, and clean-Mac
-acceptance can be tracked independently of Apple account setup.
+Apple Developer Program membership is active. The configured Apple team API key
+authenticated successfully with `notarytool history`. The Apple Team ID and
+notarization secrets are in GitHub. The stable Sparkle public variable matches
+the login Keychain key, and the protected private-key secret is present. The
+readiness audit also verifies the pinned FFmpeg source and notices.
+
+The remaining GitHub credentials are `APPLE_CERTIFICATE_P12` and
+`APPLE_CERTIFICATE_PASSWORD`. Production signing, notarization, and installation
+still need a full preflight. See the [release-readiness audit](RELEASE_READINESS.md).
+
+## Export the Developer ID identity
+
+1. On a trusted Mac, locate the **Developer ID Application** identity in **Keychain
+   Access → My Certificates**. Confirm it has a private key and belongs to the
+   configured Apple Developer team. Import an existing password-protected `.p12`
+   if you have a backup of the identity. A certificate downloaded from Apple needs
+   the matching private key on the Mac.
+2. If you need a new identity, use **Certificate Assistant → Request a Certificate
+   From a Certificate Authority** and save the CSR to disk. In Apple Developer,
+   open **Certificates, Identifiers & Profiles → Certificates → + → Developer ID
+   Application**, upload the CSR, and install the certificate on the Mac that
+   created it. Export the identity and private key from **My Certificates** as a
+   password-protected `.p12`. [Apple’s Developer ID procedure](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/).
+3. From a trusted Terminal, point to the private export and enter its password at
+   the GitHub CLI prompt.
+
+   ```bash
+   repo=oliverdougherC/BetterVMAF
+   p12=/private/path/DeveloperID.p12
+   security find-identity -v -p codesigning
+   base64 -i "$p12" | gh secret set APPLE_CERTIFICATE_P12 --repo "$repo" --env release-signing
+   gh secret set APPLE_CERTIFICATE_PASSWORD --repo "$repo" --env release-signing
+   python3 -B scripts/release/readiness.py
+   ```
+
+For fresh Sparkle or Apple API key setup, see the [release runbook](RELEASING.md#github-configuration).
+
+## Verify a signed preflight
+
+Review [PR #8](https://github.com/oliverdougherC/BetterVMAF/pull/8) and approve
+the merge. On reviewed `main` with all credential checks passing, dispatch a
+production preflight. It produces a signed artifact for review. The separate tag
+workflow creates a release draft.
+
+```bash
+gh workflow run release.yml --ref main -f mode=production-preflight
+gh run list --workflow release.yml --branch main --limit 5
+```
+
+On Apple Silicon with Rosetta available, use the checkout for the successful run.
+Replace `RUN_ID` with that run’s ID and verify the downloaded artifact.
+
+```bash
+run_id=RUN_ID
+artifact_dir="$PWD/build/preflight-$run_id"
+version=$(python3 scripts/release/release.py version)
+dmg=$(python3 scripts/release/release.py asset-name "$version")
+gh run download "$run_id" --name signed-release --dir "$artifact_dir"
+APPLE_TEAM_ID=$(gh variable get APPLE_TEAM_ID --json value --jq .value)
+SPARKLE_PUBLIC_KEY=$(gh variable get SPARKLE_PUBLIC_KEY --json value --jq .value)
+export APPLE_TEAM_ID SPARKLE_PUBLIC_KEY
+REQUIRE_BOTH_ENGINE_SLICES=1 scripts/release/verify-dmg.sh "$artifact_dir/$dmg" "$version" production
+python3 scripts/release/engine_sources.py verify-files "$artifact_dir"
+```
+
+The verifier checks the DMG and the mounted app, both staples, Gatekeeper,
+sandbox entitlements, nested signatures, architectures, bundled FFmpeg, EdDSA
+signatures, and checksums. On clean Apple Silicon and Intel Macs, install from
+the downloaded DMG, launch from Finder, run the [24-frame fixture](../Fixtures/)
+for a mean near 33.08, and open the exported CSV, JSON, and PDF.
+
+## Approve a draft and verify the live update
+
+1. Keep the signed `1.4.0` preflight app as the update test baseline. The proposed
+   first public release is `1.4.1`, build `1004001`, subject to maintainer approval.
+   The historical `1.4` draft predates Sparkle. Leave it intact.
+2. Land the approved version on `main` and repeat the production preflight. Use
+   the [version and tagging procedure](RELEASING.md#version-and-publish) after
+   approval. The tag run builds and signs a new copy.
+3. Download the draft release assets and repeat DMG and source verification on
+   that exact package. Review its release notes, DMG, checksum, signed
+   `appcast.xml`, and both FFmpeg ZIPs. Publish the reviewed draft as stable from
+   GitHub once final approval is recorded.
+4. Confirm **Deploy stable appcast** passes. Download the live feed and compare
+   it byte for byte with the appcast from the published release.
+
+   ```bash
+   curl --fail --location https://oliverdougherc.github.io/BetterVMAF/appcast.xml \
+     -o "$artifact_dir/live-appcast.xml"
+   cmp "$artifact_dir/appcast.xml" "$artifact_dir/live-appcast.xml"
+   ```
+
+   Set `artifact_dir` to the directory holding the final release assets before
+   running the comparison. If publication used `GITHUB_TOKEN`, dispatch
+   `appcast.yml` manually from `main` to deploy the verified feed.
+5. Launch the retained signed `1.4.0` app and choose **Better VMAF → Check for
+   Updates…**. Verify it downloads, installs, and relaunches as the published
+   version. Analyze the fixture again and confirm the second update check
+   reports that the app is current. Users of pre-Sparkle releases install the
+   first signed version once from GitHub Releases.

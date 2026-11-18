@@ -12,11 +12,14 @@ A maintainer publishes the draft in GitHub. The publication event validates the 
 ## Version and publish
 
 1. Set `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in [Config/Version.xcconfig](../Config/Version.xcconfig). Use `MAJOR.MINOR.PATCH` with canonical decimal components below 1000. The build number is `major * 1000000 + minor * 1000 + patch` so both versions sort in the same order. For example, `1.4.0` uses `1004000`. `python3 scripts/release/release.py build-number 1.4.0` computes it.
-2. Land the version bump on `main`. After the setup below, create and push the corresponding annotated tag on that reviewed commit. For version 1.4.0, run the commands below.
+2. Land the version bump on `main` and complete the [production preflight](PRODUCTION_ACTIVATION.md#verify-a-signed-preflight). After version and artifact approval, tag the exact commit tested by preflight. For version `1.4.1` and build `1004001`, replace `RUN_ID` with that successful run’s ID and run the following commands.
    ```bash
-   git fetch origin main
-   git tag -a v1.4.0 origin/main -m 'Better VMAF 1.4.0'
-   git push origin refs/tags/v1.4.0
+   run_id=RUN_ID
+   preflight_commit=$(gh run view "$run_id" --json headSha --jq .headSha)
+   git fetch origin main &&
+     test "$(git rev-parse origin/main)" = "$preflight_commit" &&
+     git tag -a v1.4.1 "$preflight_commit" -m 'Better VMAF 1.4.1' &&
+     git push origin refs/tags/v1.4.1
    ```
 3. Inspect the **release-signing** run in Actions. Verify the draft contains the versioned DMG, its `.sha256` file, `appcast.xml`, and both ZIPs named in [the engine source lock](../Config/EngineSources.json). Download the draft assets, verify their checksums, and test that exact signed DMG on clean Macs before publication. The tag run rebuilds and signs its own copy. Publish the complete draft as a stable release when ready.
 4. Confirm the **Deploy stable appcast** run passed and the Pages URL serves the signed feed. In an older Sparkle-enabled install, choose **Better VMAF → Check for Updates…**.
@@ -55,11 +58,12 @@ Put private signing material only in **release-signing** environment secrets.
 
 ### Trusted Mac Sparkle setup
 
-This does **not** require Apple membership. The stable identity is not yet created or
-provisioned: the maintainer must choose offline storage and a passphrase. Do not generate
-it in Actions. The helper uses Sparkle 2.10.1's checksum-pinned official `generate_keys`,
-keeps the permanent identity in your login Keychain, and exports only into a private
-short-lived directory removed at exit. Existing accounts are reused rather than rotated.
+Set up a stable identity on a trusted Mac with offline backup storage. The helper
+uses Sparkle 2.10.1's checksum-pinned official `generate_keys`, keeps the permanent
+identity in the login Keychain, and exports into a private temporary directory
+removed at exit. It reuses an existing identity when the account already exists.
+Check the [release audit](RELEASE_READINESS.md#prerequisites) for the status of the
+configured production key.
 
 On the trusted Mac with `gh` authenticated to this repository, mount your offline backup
 volume. Store a strong passphrase separately in your password manager, then run:
@@ -121,7 +125,19 @@ that test. Keep staging keys, bundle IDs and localhost feeds separate from produ
 
 ### Developer ID and notarization
 
-When membership is available, export a **Developer ID Application** identity with its private key as a password-protected PKCS#12. Create an App Store Connect team API key with access to notarization. Set these **release-signing** environment secrets:
+Use the [activation checklist](PRODUCTION_ACTIVATION.md#export-the-developer-id-identity)
+to obtain and export a password-protected **Developer ID Application** identity.
+Keep `APPLE_TEAM_ID` in repository Actions variables. Use the 10-character Team ID
+from Apple Developer Membership Details.
+
+For fresh notarization setup, open **App Store Connect → Users and Access →
+Integrations → App Store Connect API**. Request access if prompted. Generate a
+**Team Key** with the **Developer** role, then save its `.p8` file, key ID, and
+issuer UUID. The workflow uses team-key authentication with `--issuer`.
+[App Store Connect API setup](https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api/) ·
+[Apple role permissions](https://developer.apple.com/help/account/access/roles/).
+
+Set these secrets in the protected **release-signing** environment.
 
 | Secret | Value |
 | --- | --- |
@@ -131,7 +147,24 @@ When membership is available, export a **Developer ID Application** identity wit
 | `APPLE_NOTARY_KEY_ID` | App Store Connect key ID |
 | `APPLE_NOTARY_ISSUER_ID` | App Store Connect issuer UUID |
 
-Use `base64 -i /private/path/file | gh secret set <NAME> --env release-signing` to load the binary files. The runner uses a temporary keychain and deletes it at exit. Both the app and the final DMG must pass Apple notarization before EdDSA signing. Verification requires an Apple-issued Developer ID Application signature from the configured team, both stapled tickets, and Gatekeeper approval of the mounted app. With credentials absent, the production workflow cannot create a draft. [Apple distribution signing](https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution) · [Apple notarization](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow)
+Use the GitHub CLI prompts to enter identifiers or passwords and pipe file
+contents directly to GitHub for the encoded secrets.
+
+```bash
+repo=oliverdougherC/BetterVMAF
+gh variable set APPLE_TEAM_ID --repo "$repo"
+base64 -i /private/path/AuthKey.p8 | gh secret set APPLE_NOTARY_KEY --repo "$repo" --env release-signing
+gh secret set APPLE_NOTARY_KEY_ID --repo "$repo" --env release-signing
+gh secret set APPLE_NOTARY_ISSUER_ID --repo "$repo" --env release-signing
+```
+
+Authenticate the team key with a read-only `notarytool history` call. Production
+preflight verifies the entire signing path using a temporary runner keychain.
+The runner submits the app and the final DMG to Apple before applying the Sparkle
+EdDSA signatures. Verification requires Developer ID signing from the configured
+team, both stapled tickets, and Gatekeeper approval of the mounted app.
+[Apple distribution signing](https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution) ·
+[Apple notarization](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
 
 ## Local packaging and staging
 

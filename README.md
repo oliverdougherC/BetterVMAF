@@ -16,7 +16,7 @@ The heat map plots per-frame VMAF score over time: colour is the score, and shad
 
 ## Install
 
-Download a DMG from [GitHub Releases](https://github.com/oliverdougherC/BetterVMAF/releases) and drag **Better VMAF** into Applications. Existing releases are not Developer ID signed; macOS may require opening the app through **System Settings → Privacy & Security**.
+Download a DMG and drag **Better VMAF** into Applications. Sparkle-enabled builds support **Better VMAF → Check for Updates…** and optional automatic updates. If you have a pre-Sparkle build, install the first signed release from GitHub. macOS may require opening older unsigned builds through **System Settings → Privacy & Security**. [GitHub Releases](https://github.com/oliverdougherC/BetterVMAF/releases)
 
 The current source project targets **macOS 15.2 or later**. Older release assets may differ. The bundled FFmpeg engine ships separate native **arm64** and **x86_64** binaries and launches the one matching your Mac, so analysis runs natively on Apple Silicon without Rosetta and continues to run on Intel Macs. See [engine provenance](docs/ENGINE_PROVENANCE.md) for the pinned builds and checksums.
 
