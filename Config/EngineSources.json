@@ -1,0 +1,12 @@
+{
+  "repository": "mrkbac/portable-ffmpeg",
+  "tag": "ffmpeg-9.0.2-1",
+  "helpers": {
+    "ffmpeg": "2e11c6f90993cdb79fff84d3f90044d28316b310e75b3e030cfc9a54f2c9d384",
+    "ffmpeg.x86_64": "b25689cf2211c0582d317e849912769a1f1c93904fe102c485b5364a425633d1"
+  },
+  "assets": {
+    "ffmpeg-9.0.2-macos-sources.zip": "00583f1540ec1b415c7db16040e12ecdcb5a0d6f44a499ac0dd37135835d3f10",
+    "ffmpeg-9.0.2-macos-notices.zip": "963b0ec72f3f8db9ea7a5588221ee78ab227e1c19b7255ec53dee497f8c55bff"
+  }
+}

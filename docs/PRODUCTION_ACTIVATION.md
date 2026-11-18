@@ -34,7 +34,9 @@
 4. Finish the non-Apple prerequisites **before** readiness is declared:
    - Create and test the stable Sparkle identity and offline backup using the procedure
      in [RELEASING.md](RELEASING.md#trusted-mac-sparkle-setup). This can happen before renewal.
-   - Resolve the explicitly open [FFmpeg corresponding-source distribution](ENGINE_PROVENANCE.md#release-readiness-source-audit-2026-11-17).
+   - Confirm the [FFmpeg source and notices](ENGINE_PROVENANCE.md#release-readiness-source-audit-2026-11-17)
+     are available at the pinned origin and match the bundled helpers. The
+     preflight includes both archives for review.
    - Review and merge the release-readiness PR yourself. The setup agent leaves it unmerged.
    - Run the staging update's install/relaunch acceptance test on an available desktop;
      validate on a physical Intel Mac as well as Apple Silicon before publication.
@@ -43,10 +45,9 @@
    python3 scripts/release/readiness.py
    gh workflow run release.yml --ref main -f mode=production-preflight
    ```
-   The audit lists missing settings without retrieving secret values. It deliberately
-   exits nonzero while the source-distribution prerequisite remains open. Update that
-   check only when the prerequisite has actually been resolved. A passing audit checks
-   configuration; the workflow proves real signing/notarization. Find the new run in
+   The audit lists missing settings without retrieving secret values and checks the
+   pinned source archives. A passing audit checks configuration. The workflow proves
+   real signing and notarization. Find the new run in
    Actions or with `gh run list --workflow release.yml`, then inspect its logs and
    download `signed-release` with `gh run download RUN_ID --name signed-release`.
    Preflight creates **no tag, draft, release, or Pages deployment**. Missing credentials
@@ -65,7 +66,7 @@
    historical `1.4` draft is published first, the new version must sort above it. Land the version change on `main`, rerun preflight, then follow
    [Version and publish](RELEASING.md#version-and-publish) to create the annotated `vX.Y.Z`
    tag **when you authorize production release work**. Review the generated draft and
-   complete assets, source distribution, release notes and clean-Mac acceptance before
+   complete assets including the source and notices ZIPs, release notes and clean-Mac acceptance before
    publishing it as stable. A signing failure cannot create a draft; an existing release
    is never overwritten.
 8. Publish the reviewed draft manually. Confirm **Deploy stable appcast** succeeds and
@@ -80,7 +81,5 @@
    a second check. If publication used `GITHUB_TOKEN`, run `appcast.yml` manually on
    `main` because GitHub suppresses the token's release event.
 
-The credentials are the only Apple-account-dependent setup. The offline backup,
-corresponding-source work, PR merge and acceptance tests are separate prerequisites;
-renewal alone does not complete them. No production tag or publication is part of the
-credential-independent setup pass.
+The offline backup, PR review and merge, source attachment verification, and clean-Mac
+acceptance can be tracked independently of Apple account setup.

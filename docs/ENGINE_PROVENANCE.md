@@ -108,23 +108,28 @@ OpenH264, OpenJPEG, rav1e, SVT-AV1, vpx, vvenc and audio codec libraries. The pr
 and clang patch versions differ between architectures. Both upstream manifests name
 libvmaf 3.2.0. `ffmpeg -buildconf` records the actual flags without modifying a helper.
 
-The upstream [build-script repository](https://git.martin-riedl.de/ffmpeg/build-script)
-is public, but its latest visible commit during this audit is
-`f63b8aab8f5ce1a067da86ba69e34a36a7e217e5` (2026-08-17, FFmpeg 9.0.1).
-The manifests describe x264 only as `0.165.x`. Neither a public build script nor those
-version labels establish the exact source revisions, patches, configuration inputs,
-and complete linked-library notices for these September 20 prebuilt binaries.
+The provider ZIPs contain the signed FFmpeg executables. Corresponding sources are
+available from the immutable [portable-ffmpeg 9.0.2-1 release](https://github.com/mrkbac/portable-ffmpeg/releases/tag/ffmpeg-9.0.2-1),
+which reconstructs the macOS build inputs and identifies both original executables
+by their SHA-256 digests. We independently verified both manifests, every published
+dependency version against the actual [provider build recipe](https://git.martin-riedl.de/ffmpeg/build-script/commit/6a611e19870e197bc37c6e4c7fccddebd3715466),
+86 source and build archives, 18,433 notices, and the locked rav1e dependency bundle.
+The script's x264 download targets `master`. VideoLAN's official history at the
+Intel build cutoff and the current master tip both identify
+`0480cb05fa188d37ae87e8f4fd8f1aea3711f7ee`. Both pinned binaries emit x264 core 165.
+The source record is a reconstruction from this evidence. A provider attestation
+and byte-identical rebuild remain unavailable.
 
-**Still open before production distribution:** obtain and pin the full corresponding
-source and build inputs for these exact helpers, arrange durable source delivery with
-the release, and complete notices for all linked components. An alternative is a
-separate, reviewed engine-build project with fully pinned source inputs and parity
-validation. Do not silently rebuild or substitute these signed, checksum-pinned helpers
-in a release-infrastructure change. This prerequisite is independent of Apple membership;
-the read-only readiness command deliberately reports it as open until resolved in code
-and documentation. No message requesting source has been sent to the provider.
+[Config/EngineSources.json](../Config/EngineSources.json) binds the two pinned
+helpers to the source ZIP and the complete notices ZIP. The source ZIP includes
+the original archive set, provider recipe, source lock, platform-specific build
+records and rebuild instructions. Preflight and tag workflows fetch and verify
+the two ZIPs and the tag workflow attaches them to the same release as the DMG.
+The draft names and links both downloads. Pages verifies their published digests
+before deploying the stable appcast. The read-only audit checks the immutable
+origin's published asset digests and the current helpers. Keep these assets
+available along with the DMG under GPLv3 §6(d).
 
-The app now bundles the FFmpeg GPLv3 text from the upstream `n9.0.2` tag, Netflix's
-BSD-2-Clause-Patent license from `v3.2.0`, Sparkle's pinned license, and a third-party
-notice identifying the distribution status. These notices improve the package but do
-not claim to finish the corresponding-source requirement.
+The app bundles the FFmpeg GPLv3 text from the upstream `n9.0.2` tag, Netflix's
+BSD-2-Clause-Patent license from `v3.2.0`, Sparkle's pinned license and a notice
+pointing to the corresponding source and complete third-party notices.

@@ -38,6 +38,6 @@ Use the shared **VMAF** scheme. See [CONTRIBUTING.md](CONTRIBUTING.md) for build
 
 ## License and dependencies
 
-BetterVMAF's own source is [MIT licensed](LICENSE). Bundled third-party components retain their own licenses. The existing FFmpeg binary identifies GPL and version-3 build options; the app's MIT license does not replace those terms. Reproducible helper builds, notices, and corresponding-source provenance are tracked before the next release.
+BetterVMAF's source is [MIT licensed](LICENSE). The bundled FFmpeg helpers are licensed under GPL version 3 or later. See [engine provenance](docs/ENGINE_PROVENANCE.md) for the pinned corresponding source and third-party notices.
 
 Built with [SwiftUI](https://developer.apple.com/xcode/swiftui/), [FFmpeg](https://ffmpeg.org/), and [Netflix libvmaf](https://github.com/Netflix/vmaf).

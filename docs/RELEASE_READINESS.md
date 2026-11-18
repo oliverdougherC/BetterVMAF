@@ -21,15 +21,15 @@ Apple account purchase/renewal or production feed activation is part of this pas
 | Staging identity, signed appcast and archive rejection tests | Complete locally | Disposable identity only; actual pinned Sparkle signing tools plus independent CryptoKit verification. Private key exports excluded from artifacts and removed at exit. |
 | Staging install/relaunch | Complete on this Apple Silicon Mac | Installed 1.4.0 → 1.4.1 through Sparkle; About showed 1.4.1 (1004001), second check said current; external fixture scored 33.08 after relaunch. |
 | Physical Intel and clean production-Mac acceptance | Still required | Rosetta fixture execution is not native Intel or production Gatekeeper acceptance. |
-| Complete FFmpeg corresponding-source delivery and linked-library notices | Open, independent of Apple | Added GPLv3/Netflix license texts and third-party notice. Public upstream build scripts/manifests do not identify every exact input; see the source audit in ENGINE_PROVENANCE.md. Requires separate engine-provenance work or provider input; no provider contacted. |
+| FFmpeg corresponding source and linked-library notices | Verified and pinned | Verified the portable-ffmpeg source reconstruction for both binary hashes. Production preflight stages both archives. Tag packaging attaches them to the draft, and Pages checks their published digests. See ENGINE_PROVENANCE.md. |
 | `APPLE_TEAM_ID`, Developer ID Application certificate/private key, notarization team API key | Apple account dependent | Obtain after membership renewal, then provision the documented variable and five Apple secrets. |
 | Genuine signing, notarization, stapling, Gatekeeper and signed production update | Apple credentials dependent; **unvalidated** | Hardened implementation and preflight prepared. A real successful production preflight and clean-Mac test are mandatory. |
 | Production release and feed | Intentionally inactive | A maintainer reviews and publishes a complete immutable draft only after activation checks. |
 
 `python3 scripts/release/readiness.py` re-inspects the live GitHub settings, public
 variable formats and environment secret **names**, never secret values. It exits
-nonzero for missing settings, inaccessible APIs or the unresolved source-distribution
-record. Secret presence is not proof of usable credentials or an offline backup.
+nonzero for missing settings, inaccessible APIs or discrepancies in pinned FFmpeg
+helpers and source assets. Secret presence is not proof of usable credentials or an offline backup.
 
 ## Corrections
 

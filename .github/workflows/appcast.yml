@@ -48,6 +48,7 @@ jobs:
           tag=$(python3 scripts/release/release.py select-published "$RUNNER_TEMP/releases.json")
           git merge-base --is-ancestor "refs/tags/$tag^{commit}" HEAD
           git checkout --detach "refs/tags/$tag"
+          python3 scripts/release/engine_sources.py verify-published "$RUNNER_TEMP/releases.json" "$tag"
           version=$(python3 scripts/release/release.py version "$tag")
           dmg=$(python3 scripts/release/release.py asset-name "$version")
           mkdir "$RUNNER_TEMP/package" "$RUNNER_TEMP/site"

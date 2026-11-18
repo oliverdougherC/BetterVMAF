@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import os
 from pathlib import Path
 import plistlib
@@ -8,6 +9,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+import engine_sources
 import release
 
 SIGNATURE = base64.b64encode(bytes(64)).decode("ascii")
@@ -69,6 +71,36 @@ class PublicationTests(unittest.TestCase):
         ]:
             with self.subTest(newest=newest), self.assertRaises(ValueError):
                 release.select_published([[published("v1.4.0"), newest]])
+
+    def test_requires_pinned_ffmpeg_source_and_notices_on_published_release(self):
+        expected = {"source.zip": "a" * 64, "notices.zip": "b" * 64}
+        assets = [{"name": name, "state": "uploaded", "digest": f"sha256:{digest}"}
+                  for name, digest in expected.items()]
+        engine_sources.verify_release_assets(published("v1.4.0", assets=assets), expected)
+        for release_record in [
+            published("v1.4.0", assets=assets[:1]),
+            published("v1.4.0", assets=[assets[0], assets[1] | {"digest": "sha256:wrong"}]),
+            published("v1.4.0", assets=assets, draft=True),
+        ]:
+            with self.subTest(release=release_record), self.assertRaises(ValueError):
+                engine_sources.verify_release_assets(release_record, expected)
+
+    def test_rejects_changed_ffmpeg_source_asset(self):
+        source = b"pinned source archive"
+        with TemporaryDirectory() as scratch:
+            directory = Path(scratch)
+            source_path = directory / "source.zip"
+            source_path.write_bytes(source)
+            expected = {source_path.name: hashlib.sha256(source).hexdigest()}
+            engine_sources.verify_files(directory, expected)
+            source_path.write_bytes(b"P" + source[1:])
+            with self.assertRaisesRegex(ValueError, "checksum mismatch"):
+                engine_sources.verify_files(directory, expected)
+
+    def test_ffmpeg_source_lock_covers_both_bundled_helpers(self):
+        lock = engine_sources.source_lock()
+        self.assertEqual(set(lock["helpers"]), {"ffmpeg", "ffmpeg.x86_64"})
+        self.assertEqual(len(lock["assets"]), 2)
 
     def test_single_item_production_feed_cannot_raise_the_os_floor(self):
         with TemporaryDirectory() as scratch:

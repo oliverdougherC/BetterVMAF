@@ -114,6 +114,10 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
+      - name: Fetch and verify corresponding source and notices
+        run: |
+          mkdir "$RUNNER_TEMP/engine-source"
+          python3 scripts/release/engine_sources.py fetch "$RUNNER_TEMP/engine-source"
       - name: Sign and verify the release package
         env:
           REQUIRE_BOTH_ENGINE_SLICES: '1'
@@ -131,12 +135,14 @@ jobs:
             tag="v$(python3 scripts/release/release.py version)"
           fi
           scripts/release/package.sh production "$RUNNER_TEMP/package" "$tag"
+          mv "$RUNNER_TEMP/engine-source/"*.zip "$RUNNER_TEMP/package/"
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: signed-release
           path: ${{ runner.temp }}/package/
           if-no-files-found: error
           retention-days: 3
+          compression-level: 0
 
   draft:
     if: github.event_name == 'push'
@@ -161,9 +167,18 @@ jobs:
           version=$(python3 scripts/release/release.py check-new-tag "$GITHUB_REF_NAME" "$RUNNER_TEMP/releases.json")
           dmg=$(python3 scripts/release/release.py asset-name "$version")
           python3 scripts/release/release.py verify-checksum "package/$dmg"
+          python3 scripts/release/engine_sources.py verify-files package
+          source_notes=$(
+            printf '%s\n\n' '## Bundled FFmpeg'
+            printf '%s\n' 'The corresponding source, build recipe and third-party notices are available in the release assets.'
+            for archive in package/*.zip; do
+              name="${archive##*/}"
+              printf '\n- [%s](https://github.com/%s/releases/download/%s/%s)\n' "$name" "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" "$name"
+            done
+          )
           gh release create "$GITHUB_REF_NAME" --verify-tag --draft --latest=false \
-            --title "Better VMAF $version" --generate-notes \
-            "package/$dmg" "package/$dmg.sha256" package/appcast.xml
+            --title "Better VMAF $version" --generate-notes --notes "$source_notes" \
+            "package/$dmg" "package/$dmg.sha256" package/appcast.xml package/*.zip
 
   staging:
     if: ${{ !cancelled() && needs.dry-run.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.mode != 'production-preflight' }}
