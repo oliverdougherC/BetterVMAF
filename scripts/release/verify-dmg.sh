@@ -65,10 +65,7 @@ if [[ "$mode" == production ]]; then
         info=$(codesign -dvv "$component" 2>&1)
         [[ "$info" == *'runtime)'* && "$info" == *'Timestamp='* ]] ||
             { echo "Missing hardened runtime or secure timestamp: $component" >&2; exit 1; }
-        entitlements=$(codesign --display --xml --entitlements - "$component" 2>/dev/null)
-        if [[ -n "$entitlements" ]]; then
-            printf '%s' "$entitlements" | python3 -c 'import plistlib,sys; e=plistlib.load(sys.stdin.buffer); assert not e.get("com.apple.security.get-task-allow"), "Debug entitlement in production component"'
-        fi
+        python3 scripts/release/release.py check-component-entitlements "$component"
     done
     xcrun stapler validate "$app"
     spctl --assess --type execute --verbose "$app"
