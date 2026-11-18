@@ -87,3 +87,7 @@ temp_dmg/
 .env
 .env.*
 !.env.example
+
+# Python release tooling
+__pycache__/
+*.pyc

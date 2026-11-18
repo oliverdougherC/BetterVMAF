@@ -4,6 +4,12 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Unsigned package or genuine production preflight (no tag/draft/feed)
+        type: choice
+        options: [unsigned, unsigned-intel, production-preflight]
+        default: unsigned
 
 permissions:
   contents: read
@@ -13,6 +19,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  dispatch-policy:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'production-preflight' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - run: |
+          echo '::error::Production preflight must run from reviewed main. No signing or publication was attempted.'
+          exit 1
+
   validate:
     if: github.event_name == 'push' && github.repository == 'oliverdougherC/BetterVMAF'
     runs-on: ubuntu-latest
@@ -30,15 +45,45 @@ jobs:
           gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
           python3 scripts/release/release.py check-new-tag "$GITHUB_REF_NAME" "$RUNNER_TEMP/releases.json"
 
-  ci:
+  credentials:
     needs: validate
-    if: always() && (github.event_name == 'workflow_dispatch' || needs.validate.result == 'success')
+    if: >-
+      !cancelled() && ((github.event_name == 'push' && needs.validate.result == 'success') ||
+      (github.event_name == 'workflow_dispatch' && inputs.mode == 'production-preflight' && github.ref == 'refs/heads/main'))
+    environment: release-signing
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Fail before CI when signing settings are missing
+        env:
+          SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          source scripts/release/check-signing-inputs.sh
+          check_signing_inputs
+
+  ci:
+    needs: [validate, credentials]
+    if: >-
+      !cancelled() && ((github.event_name == 'workflow_dispatch' && inputs.mode != 'production-preflight') ||
+      needs.credentials.result == 'success')
     uses: ./.github/workflows/ci.yml
+    with:
+      intel_runner: ${{ inputs.mode == 'unsigned-intel' }}
 
   dry-run:
-    if: github.event_name == 'workflow_dispatch'
+    if: ${{ !cancelled() && needs.ci.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.mode != 'production-preflight' }}
     needs: ci
-    runs-on: macos-15
+    runs-on: ${{ inputs.mode == 'unsigned-intel' && 'macos-15-intel' || 'macos-15' }}
     timeout-minutes: 25
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
@@ -55,7 +100,10 @@ jobs:
           retention-days: 7
 
   sign:
-    if: github.event_name == 'push'
+    if: >-
+      !cancelled() && needs.ci.result == 'success' &&
+      ((github.event_name == 'push' && needs.validate.result == 'success') ||
+       (github.event_name == 'workflow_dispatch' && inputs.mode == 'production-preflight' && github.ref == 'refs/heads/main'))
     needs: [validate, ci]
     environment: release-signing
     runs-on: macos-15
@@ -66,6 +114,10 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
+      - name: Fetch and verify corresponding source and notices
+        run: |
+          mkdir "$RUNNER_TEMP/engine-source"
+          python3 scripts/release/engine_sources.py fetch "$RUNNER_TEMP/engine-source"
       - name: Sign and verify the release package
         env:
           REQUIRE_BOTH_ENGINE_SLICES: '1'
@@ -77,15 +129,23 @@ jobs:
           APPLE_NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY }}
           APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
           APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
-        run: scripts/release/package.sh production "$RUNNER_TEMP/package" "$GITHUB_REF_NAME"
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            tag="v$(python3 scripts/release/release.py version)"
+          fi
+          scripts/release/package.sh production "$RUNNER_TEMP/package" "$tag"
+          mv "$RUNNER_TEMP/engine-source/"*.zip "$RUNNER_TEMP/package/"
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: signed-release
           path: ${{ runner.temp }}/package/
           if-no-files-found: error
           retention-days: 3
+          compression-level: 0
 
   draft:
+    if: github.event_name == 'push'
     needs: sign
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -107,6 +167,60 @@ jobs:
           version=$(python3 scripts/release/release.py check-new-tag "$GITHUB_REF_NAME" "$RUNNER_TEMP/releases.json")
           dmg=$(python3 scripts/release/release.py asset-name "$version")
           python3 scripts/release/release.py verify-checksum "package/$dmg"
+          python3 scripts/release/engine_sources.py verify-files package
+          source_notes=$(
+            printf '%s\n\n' '## Bundled FFmpeg'
+            printf '%s\n' 'The corresponding source, build recipe and third-party notices are available in the release assets.'
+            for archive in package/*.zip; do
+              name="${archive##*/}"
+              printf '\n- [%s](https://github.com/%s/releases/download/%s/%s)\n' "$name" "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" "$name"
+            done
+          )
           gh release create "$GITHUB_REF_NAME" --verify-tag --draft --latest=false \
-            --title "Better VMAF $version" --generate-notes \
-            "package/$dmg" "package/$dmg.sha256" package/appcast.xml
+            --title "Better VMAF $version" --generate-notes --notes "$source_notes" \
+            "package/$dmg" "package/$dmg.sha256" package/appcast.xml package/*.zip
+
+  staging:
+    if: ${{ !cancelled() && needs.dry-run.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.mode != 'production-preflight' }}
+    needs: dry-run
+    runs-on: ${{ inputs.mode == 'unsigned-intel' && 'macos-15-intel' || 'macos-15' }}
+    timeout-minutes: 35
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      REQUIRE_BOTH_ENGINE_SLICES: ${{ inputs.mode == 'unsigned-intel' && '0' || '1' }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - run: scripts/release/staging-smoke.sh "$RUNNER_TEMP/staging"
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: staging-integration
+          path: ${{ runner.temp }}/staging/
+          if-no-files-found: error
+          retention-days: 3
+
+  verify-staging-transfer:
+    if: ${{ !cancelled() && needs.staging.result == 'success' }}
+    needs: staging
+    runs-on: ${{ inputs.mode == 'unsigned-intel' && 'macos-15-intel' || 'macos-15' }}
+    timeout-minutes: 15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      REQUIRE_BOTH_ENGINE_SLICES: ${{ inputs.mode == 'unsigned-intel' && '0' || '1' }}
+      SPARKLE_FEED_URL: http://localhost:18742/appcast.xml
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staging-integration
+          path: staging
+      - name: Independently verify transferred DMGs and signed feed
+        run: |
+          export SPARKLE_PUBLIC_KEY
+          SPARKLE_PUBLIC_KEY=$(cat staging/staging-public-key.txt)
+          scripts/release/verify-dmg.sh "$PWD/staging/old/Better-VMAF-1.4.0.dmg" 1.4.0 staging
+          scripts/release/verify-dmg.sh "$PWD/staging/new/Better-VMAF-1.4.1.dmg" 1.4.1 staging
+          python3 scripts/release/staging-negative-tests.py staging/new

@@ -98,3 +98,38 @@ chmod 755 VMAF/Resources/ffmpeg VMAF/Resources/ffmpeg.x86_64
 
 The server rotates "latest release" build directories; pin the two directory names above rather
 than following `/redirect/latest/...` for a reproducible re-download.
+
+## Release-readiness source audit (2026-11-17)
+
+The upstream build manifests remain available for the pinned [arm64 build](https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/versions.txt) and [Intel build](https://ffmpeg.martin-riedl.de/download/macos/amd64/1789931006_9.0.2/versions.txt).
+The flags summarized above are a subset: these helpers also statically link OpenSSL,
+libass, fontconfig, freetype, harfbuzz, libbluray, snappy, SRT, libklvanc, zvbi,
+OpenH264, OpenJPEG, rav1e, SVT-AV1, vpx, vvenc and audio codec libraries. The prefixes
+and clang patch versions differ between architectures. Both upstream manifests name
+libvmaf 3.2.0. `ffmpeg -buildconf` records the actual flags without modifying a helper.
+
+The provider ZIPs contain the signed FFmpeg executables. Corresponding sources are
+available from the immutable [portable-ffmpeg 9.0.2-1 release](https://github.com/mrkbac/portable-ffmpeg/releases/tag/ffmpeg-9.0.2-1),
+which reconstructs the macOS build inputs and identifies both original executables
+by their SHA-256 digests. We independently verified both manifests, every published
+dependency version against the actual [provider build recipe](https://git.martin-riedl.de/ffmpeg/build-script/commit/6a611e19870e197bc37c6e4c7fccddebd3715466),
+86 source and build archives, 18,433 notices, and the locked rav1e dependency bundle.
+The script's x264 download targets `master`. VideoLAN's official history at the
+Intel build cutoff and the current master tip both identify
+`0480cb05fa188d37ae87e8f4fd8f1aea3711f7ee`. Both pinned binaries emit x264 core 165.
+The source record is a reconstruction from this evidence. A provider attestation
+and byte-identical rebuild remain unavailable.
+
+[Config/EngineSources.json](../Config/EngineSources.json) binds the two pinned
+helpers to the source ZIP and the complete notices ZIP. The source ZIP includes
+the original archive set, provider recipe, source lock, platform-specific build
+records and rebuild instructions. Preflight and tag workflows fetch and verify
+the two ZIPs and the tag workflow attaches them to the same release as the DMG.
+The draft names and links both downloads. Pages verifies their published digests
+before deploying the stable appcast. The read-only audit checks the immutable
+origin's published asset digests and the current helpers. Keep these assets
+available along with the DMG under GPLv3 §6(d).
+
+The app bundles the FFmpeg GPLv3 text from the upstream `n9.0.2` tag, Netflix's
+BSD-2-Clause-Patent license from `v3.2.0`, Sparkle's pinned license and a notice
+pointing to the corresponding source and complete third-party notices.

@@ -1,0 +1,19 @@
+<?xml version='1.0' encoding='utf-8'?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <title>Better VMAF</title>
+    <link>https://github.com/oliverdougherC/BetterVMAF/releases</link>
+    <description>Better VMAF software updates</description>
+    <item>
+      <title>Better VMAF 1.4.1</title>
+      <sparkle:version>1004001</sparkle:version>
+      <sparkle:shortVersionString>1.4.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.2</sparkle:minimumSystemVersion>
+      <enclosure url="http://localhost:18742/Better-VMAF-1.4.1.dmg" length="71415831" type="application/octet-stream" sparkle:edSignature="L0XwhXxLERYqb66Yo2SnI564xUicryZ3kK/N9YFA0ISYqL5cT/+LfSApxF1JSQbNPMdmqe0Pf3fgw+U8YaApAg==" />
+    </item>
+  </channel>
+</rss>
+<!-- sparkle-signatures:
+edSignature: +7ftiZMyqF3NYjU3zM53zpSBOCx1Tl0nwub1/FiSCc3BwtbgOx4qFrV9mtcVzOeYByWOdvwrIEKgnWq+JsycBA==
+length: 805
+-->

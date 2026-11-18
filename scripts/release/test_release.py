@@ -1,4 +1,6 @@
 import base64
+import hashlib
+import os
 from pathlib import Path
 import plistlib
 import subprocess
@@ -7,6 +9,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+import engine_sources
 import release
 
 SIGNATURE = base64.b64encode(bytes(64)).decode("ascii")
@@ -68,6 +71,36 @@ class PublicationTests(unittest.TestCase):
         ]:
             with self.subTest(newest=newest), self.assertRaises(ValueError):
                 release.select_published([[published("v1.4.0"), newest]])
+
+    def test_requires_pinned_ffmpeg_source_and_notices_on_published_release(self):
+        expected = {"source.zip": "a" * 64, "notices.zip": "b" * 64}
+        assets = [{"name": name, "state": "uploaded", "digest": f"sha256:{digest}"}
+                  for name, digest in expected.items()]
+        engine_sources.verify_release_assets(published("v1.4.0", assets=assets), expected)
+        for release_record in [
+            published("v1.4.0", assets=assets[:1]),
+            published("v1.4.0", assets=[assets[0], assets[1] | {"digest": "sha256:wrong"}]),
+            published("v1.4.0", assets=assets, draft=True),
+        ]:
+            with self.subTest(release=release_record), self.assertRaises(ValueError):
+                engine_sources.verify_release_assets(release_record, expected)
+
+    def test_rejects_changed_ffmpeg_source_asset(self):
+        source = b"pinned source archive"
+        with TemporaryDirectory() as scratch:
+            directory = Path(scratch)
+            source_path = directory / "source.zip"
+            source_path.write_bytes(source)
+            expected = {source_path.name: hashlib.sha256(source).hexdigest()}
+            engine_sources.verify_files(directory, expected)
+            source_path.write_bytes(b"P" + source[1:])
+            with self.assertRaisesRegex(ValueError, "checksum mismatch"):
+                engine_sources.verify_files(directory, expected)
+
+    def test_ffmpeg_source_lock_covers_both_bundled_helpers(self):
+        lock = engine_sources.source_lock()
+        self.assertEqual(set(lock["helpers"]), {"ffmpeg", "ffmpeg.x86_64"})
+        self.assertEqual(len(lock["assets"]), 2)
 
     def test_single_item_production_feed_cannot_raise_the_os_floor(self):
         with TemporaryDirectory() as scratch:
@@ -151,7 +184,6 @@ class AppcastTests(unittest.TestCase):
             self.verify()
         verify.assert_not_called()
 
-    @unittest.skipUnless(sys.platform == "darwin", "Uses the macOS CryptoKit verifier")
     def test_real_signature_rejects_modified_bytes(self):
         # RFC 8032 section 7.1, test 2. These are published test vectors.
         public_key = base64.b64encode(bytes.fromhex(
@@ -167,10 +199,46 @@ class AppcastTests(unittest.TestCase):
         with self.assertRaises(subprocess.CalledProcessError):
             release.verify_signature(public_key, self.dmg, signature)
 
+    def test_real_staging_feed_fixture_and_corruption(self):
+        fixture = release.ROOT / 'Fixtures/ReleaseStaging'
+        public = (fixture / 'public-key.txt').read_text().strip()
+        content = release.signed_feed_content(fixture / 'appcast.xml', public)
+        self.assertIn(b'http://localhost:18742/', content)
+        self.feed.write_bytes((fixture / 'appcast.xml').read_bytes().replace(b'Better VMAF', b'Other Video', 1))
+        with self.assertRaises(subprocess.CalledProcessError):
+            release.signed_feed_content(self.feed, public)
+
     def test_checksum_changes_when_archive_is_modified(self):
         before = release.checksum(self.dmg)
         self.dmg.write_bytes(b"bad archive!")
         self.assertNotEqual(before, release.checksum(self.dmg))
+
+
+class SigningInputTests(unittest.TestCase):
+    def test_missing_credentials_fail_before_build_and_leave_no_package(self):
+        names = ['SPARKLE_PUBLIC_KEY', 'SPARKLE_PRIVATE_KEY', 'APPLE_TEAM_ID',
+                 'APPLE_CERTIFICATE_P12', 'APPLE_CERTIFICATE_PASSWORD', 'APPLE_NOTARY_KEY',
+                 'APPLE_NOTARY_KEY_ID', 'APPLE_NOTARY_ISSUER_ID']
+        environment = {k: v for k, v in os.environ.items() if k not in names}
+        with TemporaryDirectory() as scratch:
+            destination = Path(scratch) / 'package'
+            result = subprocess.run(['bash', str(release.ROOT / 'scripts/release/package.sh'),
+                                     'production', str(destination), f'v{release.project_version()}'],
+                                    env=environment, text=True, capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            for name in names:
+                self.assertIn(f'Missing production signing setting: {name}', result.stderr)
+            self.assertNotIn('xcodebuild', result.stdout)
+            self.assertFalse(destination.exists())
+
+    def test_credentials_are_removed_from_child_environments(self):
+        environment = os.environ | {'SPARKLE_PRIVATE_KEY': 'private-test-sentinel',
+                                    'APPLE_CERTIFICATE_PASSWORD': 'password-test-sentinel'}
+        script = 'source scripts/release/check-signing-inputs.sh; /usr/bin/env'
+        result = subprocess.run(['bash', '-c', script], cwd=release.ROOT, env=environment,
+                                text=True, capture_output=True, check=True)
+        self.assertNotIn('private-test-sentinel', result.stdout)
+        self.assertNotIn('password-test-sentinel', result.stdout)
 
 
 if __name__ == "__main__":

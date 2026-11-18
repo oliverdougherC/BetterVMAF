@@ -12,7 +12,9 @@ for binary in Sparkle Autoupdate Updater.app/Contents/MacOS/Updater \
     test -x "$sparkle/$binary"
 done
 
-cmp VMAF/Resources/Sparkle-LICENSE.txt "$RES/Sparkle-LICENSE.txt"
+for notice in Sparkle-LICENSE.txt FFmpeg-COPYING.GPLv3.txt ThirdPartyNotices.txt VMAF-LICENSE.txt; do
+    cmp "VMAF/Resources/$notice" "$RES/$notice"
+done
 
 for model in vmaf_v0.6.1.json vmaf_4k_v0.6.1.json; do
     cmp "VMAF/Resources/Models/$model" "$RES/$model"

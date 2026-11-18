@@ -4,6 +4,16 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      staging_transport_smoke:
+        description: Deploy only the signed staging fixture on Linux; requires the production channel to be inactive
+        type: boolean
+        default: false
+      staging_package_run_id:
+        description: Optional isolated Pages smoke test; successful unsigned package run ID; never deploys the root feed
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -18,7 +28,7 @@ jobs:
       github.repository == 'oliverdougherC/BetterVMAF' &&
       ((github.event_name == 'release' && !github.event.release.prerelease &&
         startsWith(github.event.release.tag_name, 'v')) ||
-       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
+       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.staging_package_run_id == '' && !inputs.staging_transport_smoke))
     runs-on: macos-15
     timeout-minutes: 20
     env:
@@ -38,6 +48,7 @@ jobs:
           tag=$(python3 scripts/release/release.py select-published "$RUNNER_TEMP/releases.json")
           git merge-base --is-ancestor "refs/tags/$tag^{commit}" HEAD
           git checkout --detach "refs/tags/$tag"
+          python3 scripts/release/engine_sources.py verify-published "$RUNNER_TEMP/releases.json" "$tag"
           version=$(python3 scripts/release/release.py version "$tag")
           dmg=$(python3 scripts/release/release.py asset-name "$version")
           mkdir "$RUNNER_TEMP/package" "$RUNNER_TEMP/site"
@@ -63,3 +74,83 @@ jobs:
       - name: Deploy the verified feed
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  smoke-prepare:
+    if: github.event_name == 'workflow_dispatch' && (inputs.staging_transport_smoke || inputs.staging_package_run_id != '')
+    runs-on: ${{ inputs.staging_package_run_id != '' && 'macos-15' || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      GH_TOKEN: ${{ github.token }}
+      PACKAGE_RUN_ID: ${{ inputs.staging_package_run_id }}
+      SPARKLE_FEED_URL: http://localhost:18742/appcast.xml
+      REQUIRE_BOTH_ENGINE_SLICES: '1'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Refuse any existing production channel
+        run: |
+          status=$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' https://oliverdougherc.github.io/BetterVMAF/appcast.xml)
+          test "$status" = 404
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          python3 - "$RUNNER_TEMP/releases.json" <<'PY'
+          import json, re, sys
+          releases = json.load(open(sys.argv[1]))
+          if any(not r['draft'] and not r['prerelease'] and re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', r['tag_name']) for page in releases for r in page):
+              raise SystemExit('A production Sparkle release exists; staging Pages deployment is disabled')
+          PY
+      - name: Download and independently verify staging artifacts
+        if: inputs.staging_package_run_id != ''
+        run: |
+          [[ "$PACKAGE_RUN_ID" =~ ^[0-9]+$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PACKAGE_RUN_ID" > "$RUNNER_TEMP/run.json"
+          python3 - "$RUNNER_TEMP/run.json" <<'PY'
+          import json, sys
+          r=json.load(open(sys.argv[1]))
+          assert r['conclusion'] == 'success' and r['path'] == '.github/workflows/release.yml', r
+          PY
+          gh run download "$PACKAGE_RUN_ID" --name staging-integration --dir "$RUNNER_TEMP/staging"
+          export SPARKLE_PUBLIC_KEY
+          SPARKLE_PUBLIC_KEY=$(cat "$RUNNER_TEMP/staging/staging-public-key.txt")
+          scripts/release/verify-dmg.sh "$RUNNER_TEMP/staging/new/Better-VMAF-1.4.1.dmg" 1.4.1 staging
+          mkdir -p "$RUNNER_TEMP/site/staging/release-readiness"
+          cp "$RUNNER_TEMP/staging/new/appcast.xml" "$RUNNER_TEMP/site/staging/release-readiness/appcast.xml"
+          cp "$RUNNER_TEMP/staging/staging-public-key.txt" "$RUNNER_TEMP/site/staging/release-readiness/public-key.txt"
+          test ! -e "$RUNNER_TEMP/site/appcast.xml"
+      - name: Verify and stage the real signed transport fixture
+        if: inputs.staging_package_run_id == ''
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys
+          sys.path.insert(0, 'scripts/release')
+          import release
+          root=pathlib.Path('Fixtures/ReleaseStaging')
+          content=release.signed_feed_content(root/'appcast.xml', (root/'public-key.txt').read_text().strip())
+          assert b'http://localhost:18742/' in content
+          assert release.STABLE_FEED.encode() not in content
+          PY
+          mkdir -p "$RUNNER_TEMP/site/staging/release-readiness"
+          cp Fixtures/ReleaseStaging/appcast.xml "$RUNNER_TEMP/site/staging/release-readiness/appcast.xml"
+          cp Fixtures/ReleaseStaging/public-key.txt "$RUNNER_TEMP/site/staging/release-readiness/public-key.txt"
+          test ! -e "$RUNNER_TEMP/site/appcast.xml"
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ runner.temp }}/site
+
+  smoke-deploy:
+    needs: smoke-prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages-staging
+      url: ${{ steps.deployment.outputs.page_url }}staging/release-readiness/
+    steps:
+      - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        id: deployment
