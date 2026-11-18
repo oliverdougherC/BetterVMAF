@@ -1,10 +1,52 @@
-# Release-readiness audit — 2026-11-17
+# Release-readiness audit and first production release
+
+## First production release
+
+BetterVMAF **1.4.1 (1004001)** shipped on **2026-11-18** from
+`2de216bf110fec0db409e63fe1c7425c3289c7e9`. Follow the
+[release runbook](RELEASING.md#version-and-publish) for subsequent updates.
+
+| Check | Evidence |
+| --- | --- |
+| macOS CI on the release commit | [44373318332](https://github.com/oliverdougherC/BetterVMAF/actions/runs/44373318332) |
+| Signed 1.4.0 baseline | [44365159635, attempt 2](https://github.com/oliverdougherC/BetterVMAF/actions/runs/44365159635/attempts/2) |
+| Signed 1.4.1 preflight | [44386401884](https://github.com/oliverdougherC/BetterVMAF/actions/runs/44386401884) |
+| Signed tag build and draft | [44391377539](https://github.com/oliverdougherC/BetterVMAF/actions/runs/44391377539) |
+| Immutable publication | [v1.4.1](https://github.com/oliverdougherC/BetterVMAF/releases/tag/v1.4.1) |
+| Verified production Pages deployment | [44399561506](https://github.com/oliverdougherC/BetterVMAF/actions/runs/44399561506) |
+
+The exact draft DMG and mounted app passed Developer ID, Apple notarization,
+staple and Gatekeeper checks. The signed appcast on Pages matched the release
+asset byte for byte, and the feed and DMG EdDSA signatures verified. The FFmpeg
+corresponding source and notices matched the pinned engine source lock.
+
+On Apple Silicon, the installed sandboxed app scored **33.08 over 24 frames**.
+CSV, JSON and the rendered PDF matched the 1.4.0 baseline. Sparkle installed
+the public 1.4.1 update from the retained signed 1.4.0 app and relaunched it.
+The updated app analyzed the fixture again, and a second update check reported
+that it was up to date. The Intel engine also passed under Rosetta at **33.09**.
+Native Intel installed-app acceptance remained outstanding.
+
+Published SHA-256 digests for the five attached assets
+
+```text
+583dba6689c2357e00ffab71b7d3bcc430dc13a9aabc69ec3975f0fc3f0385d5  Better-VMAF-1.4.1.dmg
+47bd909d3a84da23ecec105e3ea6cae8cd2669ce76ef9b8700360001e8327e79  Better-VMAF-1.4.1.dmg.sha256
+16a8a0a7d0b867e9118b8b4f288d6335a0c1b49722dd3f8f635bca4b2e400880  appcast.xml
+963b0ec72f3f8db9ea7a5588221ee78ab227e1c19b7255ec53dee497f8c55bff  ffmpeg-9.0.2-macos-notices.zip
+00583f1540ec1b415c7db16040e12ecdcb5a0d6f44a499ac0dd37135835d3f10  ffmpeg-9.0.2-macos-sources.zip
+```
+
+## Original audit from 2026-11-17
+
+The following snapshot records the state before production activation.
+Pending items and local build paths refer to that checkpoint.
 
 This audit starts from merged PR #7, `main` commit
 `d0ec9e5d77d8653f35130b7f28a2ad3adc62a4bc`. The release changes are in
 [PR #8](https://github.com/oliverdougherC/BetterVMAF/pull/8) for review.
-The [activation checklist](PRODUCTION_ACTIVATION.md) covers the two remaining
-certificate secrets, signed preflight, draft approval, and live update verification.
+At that checkpoint the remaining work was to provision the Developer ID
+identity and run the signed preflight, draft review and live update test.
 
 ## Prerequisites
 
@@ -109,10 +151,9 @@ workflows. The automated draft path requires successful signed/notarized packagi
 the feed deploy independently refuses incomplete, mutable or unverifiable releases.
 The unchanged historical 1.4 draft is not a Sparkle release candidate.
 
-## Remaining activation
+## Activation plan at this checkpoint
 
-Use [PRODUCTION_ACTIVATION.md](PRODUCTION_ACTIVATION.md) to export and provision
-the Developer ID identity, review the pull request, and verify a production
-preflight on `main`. Keep the signed `1.4.0` app for testing the update to the
-proposed `1.4.1` release. Production signing, notarization, and live update
-acceptance are pending.
+The plan was to provision the Developer ID identity, pass signed preflight on
+`main`, and retain the signed 1.4.0 app to test the first public update to
+1.4.1. See the [first production release](#first-production-release) for the
+results.

@@ -4,7 +4,7 @@ BetterVMAF is a free native macOS app for understanding quality lost during vide
 
 ## Start here
 
-- Read `README.md`, `CONTRIBUTING.md`, and the relevant document in `docs/`.
+- Read `README.md`, `CONTRIBUTING.md`, and the relevant guide from [docs/README.md](docs/README.md). Use the [documentation standards](docs/DOCUMENTATION.md) when updating docs.
 - Linear is the development backlog for this project. GitHub issues remain a public feedback channel; link them from Linear instead of creating competing implementation plans.
 - Work from current `main` on short-lived task branches. Keep changes focused and preserve unrelated work. Use the user's current authorization when deciding whether to merge or delete a branch.
 
@@ -31,4 +31,6 @@ Ask of every visible element: **Does the user need to see this? Is this the most
 
 ## Scope
 
-The current cleanup establishes the development foundation and roadmap. Multi-metric scoring, player replacement, and the engine refactor are planned work, not existing app capabilities.
+Use the [documentation index](docs/README.md) to find current behavior and the
+dated research and audits. Multi-metric scoring, player replacement, and the
+engine refactor remain planned work.
