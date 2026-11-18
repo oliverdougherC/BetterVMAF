@@ -166,10 +166,19 @@ def app_entitlements(mode):
     return plistlib.loads(source.replace(b"$(PRODUCT_BUNDLE_IDENTIFIER)", bundle_id.encode("ascii")))
 
 
+def signed_entitlements(component):
+    actual = subprocess.check_output(["codesign", "--display", "--xml", "--entitlements", "-", str(component)])
+    return plistlib.loads(actual) if actual else {}
+
+
 def check_entitlements(app, mode):
-    actual = subprocess.check_output(["codesign", "--display", "--xml", "--entitlements", "-", str(app)])
-    if plistlib.loads(actual) != app_entitlements(mode):
+    if signed_entitlements(app) != app_entitlements(mode):
         raise ValueError("Packaged app signature has unexpected entitlements")
+
+
+def check_component_entitlements(component):
+    if signed_entitlements(component).get("com.apple.security.get-task-allow"):
+        raise ValueError(f"Debug entitlement in production component: {component}")
 
 
 def verify_signature(public_key, path, signature):
@@ -237,7 +246,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=[
         "version", "build-number", "asset-name", "stable-feed", "staging-archive",
-        "select-published", "check-new-tag", "check-bundle", "write-entitlements", "check-entitlements", "render-feed", "verify-feed",
+        "select-published", "check-new-tag", "check-bundle", "write-entitlements", "check-entitlements",
+        "check-component-entitlements", "render-feed", "verify-feed",
         "checksum", "verify-checksum", "verify-signature",
     ])
     parser.add_argument("args", nargs="*")
@@ -274,6 +284,8 @@ def main():
     elif command == "check-entitlements":
         path, mode = args
         check_entitlements(Path(path), mode)
+    elif command == "check-component-entitlements":
+        check_component_entitlements(*args)
     elif command in {"render-feed", "verify-feed"}:
         if command == "render-feed":
             path, dmg, version, archive_url, minimum_os, signature = args

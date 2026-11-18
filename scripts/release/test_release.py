@@ -3,6 +3,7 @@ import hashlib
 import os
 from pathlib import Path
 import plistlib
+import shutil
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -225,6 +226,28 @@ class DeveloperIDTests(unittest.TestCase):
                                     text=True, capture_output=True)
         self.assertNotEqual(wrong_team.returncode, 0)
         self.assertIn('code failed to satisfy specified code requirement', wrong_team.stderr)
+
+    def test_component_entitlements_accept_release_and_reject_debug(self):
+        with TemporaryDirectory() as scratch:
+            component = Path(scratch) / 'Test Component'
+            shutil.copy('/usr/bin/true', component)
+            entitlements = Path(scratch) / 'Test.entitlements'
+            verify = [sys.executable, str(release.ROOT / 'scripts/release/release.py'),
+                      'check-component-entitlements', str(component)]
+            for values in (None, {'com.apple.security.app-sandbox': True},
+                           {'com.apple.security.get-task-allow': True}):
+                with self.subTest(entitlements=values):
+                    signing = ['codesign', '--force', '--sign', '-']
+                    if values is not None:
+                        entitlements.write_bytes(plistlib.dumps(values))
+                        signing += ['--entitlements', str(entitlements)]
+                    subprocess.run([*signing, str(component)], check=True, capture_output=True)
+                    result = subprocess.run(verify, text=True, capture_output=True)
+                    if values and 'com.apple.security.get-task-allow' in values:
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn('Debug entitlement in production component', result.stderr)
+                    else:
+                        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 class SigningInputTests(unittest.TestCase):
