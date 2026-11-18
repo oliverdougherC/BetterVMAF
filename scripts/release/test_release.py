@@ -214,6 +214,19 @@ class AppcastTests(unittest.TestCase):
         self.assertNotEqual(before, release.checksum(self.dmg))
 
 
+@unittest.skipUnless(sys.platform == "darwin", "Requires macOS codesign")
+class DeveloperIDTests(unittest.TestCase):
+    def test_verifier_accepts_pinned_developer_id_and_rejects_wrong_team(self):
+        script = 'source scripts/release/verify-developer-id.sh; verify_developer_id "$@"'
+        helpers = ['VMAF/Resources/ffmpeg', 'VMAF/Resources/ffmpeg.x86_64']
+        command = ['bash', '-c', script, 'verify_developer_id']
+        subprocess.run([*command, 'KU3N25YGLU', *helpers], cwd=release.ROOT, check=True)
+        wrong_team = subprocess.run([*command, 'AAAAAAAAAA', helpers[0]], cwd=release.ROOT,
+                                    text=True, capture_output=True)
+        self.assertNotEqual(wrong_team.returncode, 0)
+        self.assertIn('code failed to satisfy specified code requirement', wrong_team.stderr)
+
+
 class SigningInputTests(unittest.TestCase):
     def test_missing_credentials_fail_before_build_and_leave_no_package(self):
         names = ['SPARKLE_PUBLIC_KEY', 'SPARKLE_PRIVATE_KEY', 'APPLE_TEAM_ID',

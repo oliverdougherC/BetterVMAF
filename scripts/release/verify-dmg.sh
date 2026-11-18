@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.."
+source scripts/release/verify-developer-id.sh
 dmg="${1:?Specify an absolute DMG path}"
 version="${2:?Specify the expected version}"
 mode="${3:?Specify production, staging, or dry-run}"
@@ -37,9 +38,7 @@ if [[ "$mode" == production || "$mode" == staging ]]; then
 fi
 if [[ "$mode" == production ]]; then
     team="${APPLE_TEAM_ID:?Missing expected Developer ID team}"
-    [[ "$team" =~ ^[A-Z0-9]{10}$ ]] || { echo "Invalid Apple Team ID" >&2; exit 1; }
-    requirement="anchor apple generic and certificate leaf[subject.OU] = \"$team\" and certificate leaf[field.1.2.840.113635.100.6.1.13] exists"
-    codesign --verify --strict -R "$requirement" "$dmg"
+    verify_developer_id "$team" "$dmg"
     xcrun stapler validate "$dmg"
     spctl --assess --type open --context context:primary-signature --verbose "$dmg"
 fi
@@ -57,13 +56,12 @@ if [[ "$mode" != dry-run ]]; then
     python3 scripts/release/release.py check-entitlements "$app" "$mode"
 fi
 if [[ "$mode" == production ]]; then
-    codesign --verify --strict -R "$requirement" "$app"
     # Deep verification checks integrity, but not each component's team/runtime.
     sparkle="$app/Contents/Frameworks/Sparkle.framework/Versions/Current"
     for component in "$app" "$app/Contents/Frameworks/Sparkle.framework" \
         "$sparkle/Autoupdate" "$sparkle/Updater.app" \
         "$sparkle/XPCServices/Installer.xpc" "$sparkle/XPCServices/Downloader.xpc"; do
-        codesign --verify --strict -R "$requirement" "$component"
+        verify_developer_id "$team" "$component"
         info=$(codesign -dvv "$component" 2>&1)
         [[ "$info" == *'runtime)'* && "$info" == *'Timestamp='* ]] ||
             { echo "Missing hardened runtime or secure timestamp: $component" >&2; exit 1; }
